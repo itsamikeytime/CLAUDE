@@ -17,7 +17,7 @@
 - **Exploded view** separates band, setting and stone cleanly without stretching any part.
 - **2D facet drawings** follow each shape's real outline (brilliant, step-cut and crescent patterns).
 - **Unique halo colors** now show in 3D and export as separately named parts for multi-color printing.
-- **Crescent Moon** fills its full stated width (it previously spanned half of it). Saved designs with crescents will look wider than before.
+- **True Heart and Crescent Moon shapes.** The heart now has two round lobes, a sharp notch and a pointed tip; the crescent is a true crescent (a circle with an overlapping circle cut away) with circular edges and sharp horns. The crescent is naturally taller than it is wide (height = 1.36 × width) and the heart slightly wider than tall (height = 0.9 × width), so saved designs using these shapes will look different. Prongs, V-prong claws, bezels and halos follow the new outlines.
 
 ### Fixed
 - The 3D preview no longer stretches round stones into ovals on shorter screens.
@@ -25,3 +25,4 @@
 - Faint square boxes around prong shadows in 2D.
 - Crescent prongs that floated off the stone.
 - Crescent Moon stones in 3D no longer fill in their hollow with straight edges.
+- Halo stones and bezels no longer overlap or glitch at a heart's notch.
