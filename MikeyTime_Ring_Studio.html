@@ -1683,6 +1683,27 @@ const Ring3DPreviewCanvas = ({
   const [camZoom, setCamZoom] = useState(1.18);
   const [isDragging, setIsDragging] = useState(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
+  // Pixel buffer matched to the canvas's on-screen box. A fixed 920x360
+  // buffer gets stretched unevenly once maxHeight caps the displayed height,
+  // turning round stones into ovals, so the buffer follows the real size.
+  const [canvasSize, setCanvasSize] = useState({ width: 920, height: 360 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    const syncSize = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const width = Math.round(rect.width * dpr);
+      const height = Math.round(rect.height * dpr);
+      setCanvasSize(prev => (prev.width === width && prev.height === height ? prev : { width, height }));
+    };
+    syncSize();
+    const observer = new ResizeObserver(syncSize);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!externalCameraRequest) return;
@@ -1734,7 +1755,7 @@ const Ring3DPreviewCanvas = ({
     const cosX = Math.cos(rx), sinX = Math.sin(rx);
     const cosY = Math.cos(ry), sinY = Math.sin(ry);
 
-    const mmScale = 12.2 * camZoom;
+    const mmScale = 12.2 * camZoom * (height / 360);
     const fov = 165;
 
     const project3D = (pt, radialExplode = 0) => {
@@ -1872,7 +1893,7 @@ const Ring3DPreviewCanvas = ({
     });
 
     ctx.putImageData(imgData, 0, 0);
-  }, [shells, rotX, rotY, camZoom, explodeParts]);
+  }, [shells, rotX, rotY, camZoom, explodeParts, canvasSize]);
 
   const handlePointerDown = (e) => {
     setIsDragging(true);
@@ -1904,8 +1925,8 @@ const Ring3DPreviewCanvas = ({
     <div className="relative w-full max-w-5xl flex flex-col items-center">
       <canvas
         ref={canvasRef}
-        width={920}
-        height={360}
+        width={canvasSize.width}
+        height={canvasSize.height}
         onMouseDown={handlePointerDown}
         onMouseMove={handlePointerMove}
         onMouseUp={handlePointerUp}
@@ -1915,7 +1936,7 @@ const Ring3DPreviewCanvas = ({
         onTouchEnd={handlePointerUp}
         onWheel={handleWheel}
         className="w-full h-auto rounded-lg border border-slate-700 shadow-2xl cursor-grab active:cursor-grabbing"
-        style={{ maxHeight: '35vh' }}
+        style={{ maxHeight: '35vh', aspectRatio: '920 / 360' }}
       />
 
       <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 bg-slate-900/85 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700 text-white text-xs">
