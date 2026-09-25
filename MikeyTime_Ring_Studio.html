@@ -737,6 +737,36 @@ const projectPointToPolygonContour2D = (u, v, poly) => {
   return { u: bestX, v: bestY };
 };
 
+// Band cross-section. drop(v) is how far the outer surface sits below the
+// band's crown at position v across the band (v = 0 is the centerline, the
+// edges are at +/-halfW). Shared by the 3D model and the 2D blueprint shading.
+//   flat:  no drop - square edges.
+//   bevel: flat top with a 45-degree chamfer of width `edge` on both sides.
+//   round: domed top (quarter-ellipse to each side) dropping `edge` at the rims.
+const BAND_PROFILES = [
+  { id: 'flat', label: 'Flat' },
+  { id: 'bevel', label: 'Beveled' },
+  { id: 'round', label: 'Rounded' }
+];
+const getBandProfile = (profile, halfW, thickness) => {
+  if (profile === 'bevel') {
+    const edge = Math.min(0.6, halfW * 0.3, thickness * 0.35);
+    return { edge, breakV: halfW - edge, drop: (v) => Math.max(0, Math.abs(v) - (halfW - edge)) };
+  }
+  if (profile === 'round') {
+    const edge = Math.min(thickness * 0.45, halfW * 0.5);
+    return {
+      edge,
+      breakV: 0,
+      drop: (v) => {
+        const t = Math.min(1, Math.abs(v) / halfW);
+        return edge * (1 - Math.sqrt(1 - t * t));
+      }
+    };
+  }
+  return { edge: 0, breakV: halfW, drop: () => 0 };
+};
+
 const build3DRingShells = ({
   renderedStones,
   bandWidth,
@@ -747,7 +777,8 @@ const build3DRingShells = ({
   pocketDepthInput,
   uniqueStone3D,
   include3DSettings,
-  cutoutMode = 'pocket_and_gem'
+  cutoutMode = 'pocket_and_gem',
+  bandProfile = 'flat'
 }) => {
   const innerDiameter = RING_SIZES_MM[ringSize] || (11.63 + Number(ringSize) * 0.8128);
   const innerRadius = innerDiameter / 2;
@@ -759,6 +790,9 @@ const build3DRingShells = ({
   const globalRelief = Number(gemRelief ?? 1.2);
   const globalPocketDepth = Math.min(thickness * 0.72, Math.max(0.2, Number(pocketDepthInput) || 0.75));
   const defaultRFloor = outerRadius - globalPocketDepth;
+  const profile = getBandProfile(bandProfile, halfW, thickness);
+  // Radius of the band's outer surface at position v across the band.
+  const surfR = (v) => outerRadius - profile.drop(v);
 
   // Cylindrical wrap used ONLY for the band shell itself (outer surface, pocket
   // floors/walls, inner bore): one shared reference radius (outerRadius) keeps
@@ -803,11 +837,15 @@ const build3DRingShells = ({
   // elevation. The whole piece stays perfectly flat/rigid and undistorted,
   // and is simply positioned + tilted once to sit at the right spot on the
   // ring - exactly like a real stone glued onto a domed surface.
+  // On a beveled or rounded band the frame drops to the band's surface at the
+  // stone's center, so a stone set off-center sits on the band rather than
+  // floating at the crown's height. All heights stay relative to the crown.
   const makeFlatFrame = (centerU, centerV) => {
     const theta0 = centerU / outerRadius;
     const sinT = Math.sin(theta0), cosT = Math.cos(theta0);
+    const rC = surfR(centerV);
     return {
-      center: { x: outerRadius * sinT, y: -centerV, z: outerRadius * cosT },
+      center: { x: rC * sinT, y: -centerV, z: rC * cosT },
       tangent: { x: cosT, y: 0, z: -sinT },
       vAxis: { x: 0, y: -1, z: 0 },
       normal: { x: sinT, y: 0, z: cosT },
@@ -855,7 +893,7 @@ const build3DRingShells = ({
       : globalPocketDepth;
 
     const stonePocketDepth = Math.min(thickness * 0.78, Math.max(0.2, resolvedPocketDepthRaw));
-    const stoneRFloor = outerRadius - stonePocketDepth;
+    const stoneRFloor = surfR(stone.y) - stonePocketDepth;
 
     const isFlushStone = stone.settingStyle === 'Flush' || resolvedRelief <= 0.01;
     const effectiveRelief = stone.settingStyle === 'Flush' ? 0 : resolvedRelief;
@@ -1036,11 +1074,32 @@ const build3DRingShells = ({
     uSamples.push(maxStoneU + ((halfCirc - maxStoneU) * i) / backRightSteps);
   }
 
-  const vSteps = carveBandPockets ? Math.max(28, Math.min(56, Math.ceil(bw / 0.14))) : 4;
-  const vSamples = [];
-  for (let j = 0; j <= vSteps; j++) {
-    vSamples.push(-halfW + (bw * j) / vSteps);
+  // Rows across the band. A shaped profile needs enough rows to follow its
+  // curve, plus rows exactly on a bevel's fold lines so the chamfer is crisp
+  // and extra rows near a domed band's rims where it curves fastest.
+  let baseVSteps = carveBandPockets ? Math.max(28, Math.min(56, Math.ceil(bw / 0.14))) : 4;
+  if (bandProfile !== 'flat') baseVSteps = Math.max(baseVSteps, 24);
+  const vSet = [];
+  for (let j = 0; j <= baseVSteps; j++) vSet.push(-halfW + (bw * j) / baseVSteps);
+  if (bandProfile === 'bevel') {
+    // Move the nearest row onto each fold line rather than adding one beside
+    // it: two rows closer than the socket snapping distance fold onto each
+    // other and break the mesh.
+    [-profile.breakV, profile.breakV].forEach((fold) => {
+      let best = 1;
+      for (let j = 2; j < vSet.length - 1; j++) {
+        if (Math.abs(vSet[j] - fold) < Math.abs(vSet[best] - fold)) best = j;
+      }
+      vSet[best] = fold;
+    });
   }
+  // Fold rows keep their exact position (no snapping onto a socket edge), so
+  // a socket edge lying along a fold can't pull a whole row onto itself.
+  const isFoldRow = (v) => bandProfile === 'bevel' && Math.abs(Math.abs(v) - profile.breakV) < 1e-9;
+  if (bandProfile === 'round') [0.93, 0.975, 0.995].forEach(f => vSet.push(-halfW * f, halfW * f));
+  vSet.sort((a, b) => a - b);
+  const vSamples = vSet.filter((v, j) => j === 0 || v - vSet[j - 1] > 1e-6);
+  const vSteps = vSamples.length - 1;
 
   const numU = uSamples.length;
   const numV = vSteps + 1;
@@ -1067,7 +1126,7 @@ const build3DRingShells = ({
         if (res.stone) {
           localRFloor = res.stone.stoneRFloor;
         }
-        if (Math.abs(d) < 0.032 && res.stone) {
+        if (Math.abs(d) < 0.032 && res.stone && !isFoldRow(v)) {
           let snapped = projectPointToPolygonContour2D(u, v, res.stone.cutContourUV);
           for (let c = 0; c < res.stone.cornerUVs.length; c++) {
             const cPt = res.stone.cornerUVs[c];
@@ -1084,8 +1143,8 @@ const build3DRingShells = ({
 
       gridUV[idx] = { u, v, idx, rFloor: localRFloor };
       gridDist[idx] = d;
-      gridOutVerts[idx] = wrapPoint(u, v, outerRadius);
-      gridFlrVerts[idx] = wrapPoint(u, v, localRFloor);
+      gridOutVerts[idx] = wrapPoint(u, v, surfR(v));
+      gridFlrVerts[idx] = wrapPoint(u, v, Math.min(localRFloor, surfR(v) - 0.12));
       if (j === 0 || j === vSteps) {
         gridInVerts[idx] = wrapPoint(u, v, innerRadius);
       }
@@ -1140,8 +1199,8 @@ const build3DRingShells = ({
     }
 
     cached = {
-      out: wrapPoint(cu, cv, outerRadius),
-      flr: wrapPoint(cu, cv, crossRFloor)
+      out: wrapPoint(cu, cv, surfR(cv)),
+      flr: wrapPoint(cu, cv, Math.min(crossRFloor, surfR(cv) - 0.12))
     };
     edgeCrossingCache.set(key, cached);
     return cached;
@@ -1257,7 +1316,7 @@ const build3DRingShells = ({
     const n = pts2D.length;
     const frame = makeFlatFrame(opts.frameU ?? centerU, opts.frameV ?? centerV);
     const placeRoot = opts.wrapRoot
-      ? (u, v, h) => wrapPoint(u, v, h)
+      ? (u, v, h) => wrapPoint(u, v, Math.min(h, surfR(v) - 0.25))
       : (u, v, h) => placeFlat(frame, u, v, h);
 
     const transform2D = (pt, scale = 1) => {
@@ -1375,13 +1434,13 @@ const build3DRingShells = ({
       const inRootV = clampRootToBandV(uvSeatIn.v, 1);
       const seatV = Math.max(-halfW, Math.min(halfW, uvOutSkirt.v));
 
-      outRootRing.push(wrapPoint(uvOutSkirt.u, baseRootV, rRoot));
-      outSeatRing.push(wrapPoint(uvOutSkirt.u, seatV, rBandSeat));
+      outRootRing.push(wrapPoint(uvOutSkirt.u, baseRootV, Math.min(rRoot, surfR(baseRootV) - 0.25)));
+      outSeatRing.push(wrapPoint(uvOutSkirt.u, seatV, rBandSeat - profile.drop(seatV)));
       outGirdleRing.push(placeFlat(frame, uvOutGirdle.u, uvOutGirdle.v, rGirdle));
       outTopRing.push(placeFlat(frame, uvOutTop.u, uvOutTop.v, rTopOuter));
       inLipRing.push(placeFlat(frame, uvLipIn.u, uvLipIn.v, rTopLip));
       inGirdleRing.push(placeFlat(frame, uvSeatIn.u, uvSeatIn.v, rInnerGirdle));
-      inRootRing.push(wrapPoint(uvSeatIn.u, inRootV, rRoot));
+      inRootRing.push(wrapPoint(uvSeatIn.u, inRootV, Math.min(rRoot, surfR(inRootV) - 0.25)));
     }
 
     const tris = [];
@@ -1510,7 +1569,7 @@ const build3DRingShells = ({
         : uvR.v;
 
       // Foot follows the band's curve so it stays planted in the shank.
-      rootRing.push(wrapPoint(uvR.u, clampedRootV, rRoot));
+      rootRing.push(wrapPoint(uvR.u, clampedRootV, Math.min(rRoot, surfR(clampedRootV) - 0.25)));
       girdleRing.push(placeFlat(frame, uvG.u, uvG.v, rGirdle));
       topRing.push(placeFlat(frame, uvT.u, uvT.v, rTop));
     }
@@ -1563,9 +1622,9 @@ const build3DRingShells = ({
     for (let i = 0; i < n; i++) {
       const pIn = transformPt2D(innerPts2D[i]);
       const pOut = transformPt2D(outerPts2D[i]);
-      inBot.push(wrapPoint(pIn.u, clampToBandV(pIn.v), rRoot));
+      inBot.push(wrapPoint(pIn.u, clampToBandV(pIn.v), Math.min(rRoot, surfR(clampToBandV(pIn.v)) - 0.25)));
       inTop.push(placeFlat(frame, pIn.u, pIn.v, rTop));
-      outBot.push(wrapPoint(pOut.u, clampToBandV(pOut.v), rRoot));
+      outBot.push(wrapPoint(pOut.u, clampToBandV(pOut.v), Math.min(rRoot, surfR(clampToBandV(pOut.v)) - 0.25)));
       outTop.push(placeFlat(frame, pOut.u, pOut.v, rTop));
     }
 
@@ -2301,6 +2360,7 @@ function App() {
   const [uniqueStone3D, setUniqueStone3D] = useState(false);
   const [include3DSettings, setInclude3DSettings] = useState(true);
   const [cutoutMode, setCutoutMode] = useState('pocket_and_gem');
+  const [bandProfile, setBandProfile] = useState('flat');
 
   const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(true);
   const [is3DSettingsOpen, setIs3DSettingsOpen] = useState(true);
@@ -2410,7 +2470,7 @@ function App() {
       zoom, bandColor, bandWidth, isFlatBand, layoutMode,
       showSeparation, showWidth, showVertical, verticalFrom,
       measTextSize, showRuler, rulerScale, rulerOffset,
-      ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode,
+      ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile,
       stones
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
@@ -2447,6 +2507,7 @@ function App() {
           setUniqueStone3D(config.uniqueStone3D ?? false);
           setInclude3DSettings(config.include3DSettings ?? true);
           setCutoutMode(config.cutoutMode ?? 'pocket_and_gem');
+          setBandProfile(BAND_PROFILES.some(bp => bp.id === config.bandProfile) ? config.bandProfile : 'flat');
 
           setStones(config.stones);
           setErrorMessage('');
@@ -2547,9 +2608,10 @@ function App() {
       pocketDepthInput,
       uniqueStone3D,
       include3DSettings,
-      cutoutMode
+      cutoutMode,
+      bandProfile
     });
-  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode]);
+  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile]);
 
   const handleExportSTL = useCallback(() => {
     const blob = generateBinarySTLBlob(ring3DData.shells, bandWidth);
@@ -2934,6 +2996,15 @@ function App() {
                   <stop offset="100%" stopColor="#222222" />
                 </linearGradient>
 
+                <linearGradient id="band-dome-shade" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(0,0,0,0.30)" />
+                  <stop offset="12%" stopColor="rgba(255,255,255,0.05)" />
+                  <stop offset="32%" stopColor="rgba(255,255,255,0.42)" />
+                  <stop offset="50%" stopColor="rgba(255,255,255,0.12)" />
+                  <stop offset="78%" stopColor="rgba(0,0,0,0.12)" />
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.42)" />
+                </linearGradient>
+
                 <radialGradient id="gemShade" cx="30%" cy="30%" r="70%">
                   <stop offset="0%" stopColor="rgba(255,255,255,0.8)" />
                   <stop offset="40%" stopColor="rgba(255,255,255,0)" />
@@ -2965,12 +3036,45 @@ function App() {
                 filter={isFlatBand ? undefined : "url(#drop-shadow)"}
               />
 
-              {!isFlatBand && (
-                <>
-                  <rect x={-svgWidthMM/2} y={-(Number(bandWidth) / 2) + 0.2} width={svgWidthMM} height={(Number(bandWidth) || 0) * 0.1} fill="rgba(255,255,255,0.4)" />
-                  <rect x={-svgWidthMM/2} y={(Number(bandWidth) / 2) - ((Number(bandWidth) || 0) * 0.15)} width={svgWidthMM} height={(Number(bandWidth) || 0) * 0.1} fill="rgba(0,0,0,0.2)" />
-                </>
-              )}
+              {(() => {
+                // Top-down shading for the band's cross-section, using the same
+                // profile as the 3D model (light comes from the top of the view).
+                const halfBW = (Number(bandWidth) || 0) / 2;
+                const prof = getBandProfile(bandProfile, halfBW, Math.max(1.2, Number(bandThickness) || 1.8));
+                const x0 = -svgWidthMM / 2;
+                if (bandProfile === 'bevel') {
+                  const b = prof.edge;
+                  return (
+                    <g>
+                      {!isFlatBand && (
+                        <>
+                          <rect x={x0} y={-halfBW + b + 0.15} width={svgWidthMM} height={(halfBW - b) * 0.18} fill="rgba(255,255,255,0.35)" />
+                          <rect x={x0} y={-halfBW} width={svgWidthMM} height={b} fill="rgba(255,255,255,0.32)" />
+                          <rect x={x0} y={halfBW - b} width={svgWidthMM} height={b} fill="rgba(0,0,0,0.28)" />
+                        </>
+                      )}
+                      <line x1={x0} x2={-x0} y1={-halfBW + b} y2={-halfBW + b} stroke={isFlatBand ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.18)'} strokeWidth="0.06" />
+                      <line x1={x0} x2={-x0} y1={halfBW - b} y2={halfBW - b} stroke={isFlatBand ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.25)'} strokeWidth="0.06" />
+                    </g>
+                  );
+                }
+                if (bandProfile === 'round') {
+                  return isFlatBand ? (
+                    <g stroke="rgba(0,0,0,0.25)" strokeWidth="0.05" strokeDasharray="0.6,0.4">
+                      <line x1={x0} x2={-x0} y1={-halfBW * 0.6} y2={-halfBW * 0.6} />
+                      <line x1={x0} x2={-x0} y1={halfBW * 0.6} y2={halfBW * 0.6} />
+                    </g>
+                  ) : (
+                    <rect x={x0} y={-halfBW} width={svgWidthMM} height={halfBW * 2} fill="url(#band-dome-shade)" />
+                  );
+                }
+                return !isFlatBand && (
+                  <>
+                    <rect x={x0} y={-halfBW + 0.2} width={svgWidthMM} height={halfBW * 2 * 0.1} fill="rgba(255,255,255,0.4)" />
+                    <rect x={x0} y={halfBW - (halfBW * 2 * 0.15)} width={svgWidthMM} height={halfBW * 2 * 0.1} fill="rgba(0,0,0,0.2)" />
+                  </>
+                );
+              })()}
 
               {renderedStones.map((stone) => {
                 const w = Number(stone.width) || 0;
@@ -3187,7 +3291,7 @@ function App() {
               <span className="font-mono tabular">US {ringSize}</span>
               <span className="font-mono tabular">Bore Ø {ring3DData.innerDiameter.toFixed(2)} mm</span>
               <span className="font-mono tabular">Outer Ø {ring3DData.outerDiameter.toFixed(2)} mm</span>
-              <span className="font-mono tabular">Band {Number(bandWidth).toFixed(2)} × {Number(bandThickness).toFixed(1)} mm</span>
+              <span className="font-mono tabular">Band {Number(bandWidth).toFixed(2)} × {Number(bandThickness).toFixed(1)} mm{bandProfile !== 'flat' ? ` · ${BAND_PROFILES.find(bp => bp.id === bandProfile)?.label.toLowerCase()}` : ''}</span>
               <span className="font-mono tabular">{stones.length} {stones.length === 1 ? 'stone' : 'stones'} · {ring3DData.shells.length} print parts</span>
               <span className="sm:ml-auto text-gray-400">
                 {canvasViewMode === '3d' ? 'Drag to rotate · scroll to zoom' : 'Grid: 1 mm minor, 10 mm major'}
@@ -3351,6 +3455,11 @@ function App() {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">US {ringSize}</span>
                   <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">{Number(bandThickness).toFixed(1)} mm thick</span>
+                  {bandProfile !== 'flat' && (
+                    <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
+                      {BAND_PROFILES.find(bp => bp.id === bandProfile)?.label} edges
+                    </span>
+                  )}
                   <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
                     {uniqueStone3D ? 'Per-stone heights' : (Number(gemRelief) === 0 ? 'Flush' : `${Number(gemRelief).toFixed(1)} mm relief`)}
                   </span>
@@ -3383,6 +3492,30 @@ function App() {
                     </span>
                   </div>
 
+                  <div className="flex flex-col gap-1.5 mb-1">
+                    <span className="text-xs font-semibold text-gray-600">Band Profile</span>
+                    <div role="radiogroup" aria-label="Band profile" className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-md border border-gray-200">
+                      {BAND_PROFILES.map(bp => (
+                        <button
+                          key={bp.id}
+                          role="radio"
+                          aria-checked={bandProfile === bp.id}
+                          onClick={() => setBandProfile(bp.id)}
+                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-xs font-semibold transition-all ${
+                            bandProfile === bp.id ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          <svg viewBox="0 0 24 12" className="w-6 h-3" aria-hidden="true">
+                            <path
+                              d={bp.id === 'flat' ? 'M2 11 V3 H22 V11 Z' : bp.id === 'bevel' ? 'M2 11 V6 L5 3 H19 L22 6 V11 Z' : 'M2 11 V8 Q2 2 12 2 Q22 2 22 8 V11 Z'}
+                              fill="currentColor" opacity="0.85"
+                            />
+                          </svg>
+                          {bp.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <ControlSlider label="US Ring Size" value={ringSize} min={3} max={15} step={0.25} onChange={setRingSize} unit="US" />
                   <ControlSlider label="Band Thickness" value={bandThickness} min={1.2} max={4.0} step={0.1} onChange={setBandThickness} unit="mm" />
                   <ControlSlider label="Gem Relief Height (0 = Flush)" value={gemRelief} min={0.0} max={3.5} step={0.1} onChange={setGemRelief} unit="mm" />
