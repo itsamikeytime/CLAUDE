@@ -1,6 +1,6 @@
 # MikeyTime Ring Studio changelog
 
-## v1.31
+## v1.3.1
 
 ### Fixed
 - **PNG and SVG export now work from the 3D view.** Both export the 2D blueprint; they used to do nothing unless the 2D view was showing.
