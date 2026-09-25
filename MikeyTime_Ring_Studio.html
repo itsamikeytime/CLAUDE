@@ -108,7 +108,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.31';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -2952,16 +2952,25 @@ function App() {
     triggerDownload(blob, `mikeytime-ring-size-${ringSize}-multiobject.3mf`);
   }, [ring3DData, ringSize, bandWidth]);
 
+  // Serializes a copy of the blueprint without the hiding it gets in 3D view,
+  // so an export taken from either view opens as a visible drawing.
+  const serializeBlueprint = () => {
+    const clone = svgRef.current.cloneNode(true);
+    clone.style.display = '';
+    clone.removeAttribute('aria-hidden');
+    return new XMLSerializer().serializeToString(clone);
+  };
+
   const handleExportSVG = () => {
     if (!svgRef.current) return;
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const svgData = serializeBlueprint();
     const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     triggerDownload(blob, 'ring-design.svg');
   };
 
   const handleExportPNG = () => {
     if (!svgRef.current) return;
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const svgData = serializeBlueprint();
     const canvas = document.createElement("canvas");
     canvas.width = 1920;
     canvas.height = 960;
@@ -3346,19 +3355,22 @@ function App() {
             </div>
 
             <div className="relative w-full flex justify-center">
-          {canvasViewMode === '3d' ? (
+          {canvasViewMode === '3d' && (
             <Ring3DPreviewCanvas
               shells={ring3DData.shells}
               externalCameraRequest={externalCameraRequest}
               explodeParts={explode3DParts}
             />
-          ) : (
+          )}
+            {/* The blueprint stays on the page in 3D view (just hidden), so the
+                PNG and SVG exports work from either view. */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               ref={svgRef}
               viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`}
               className="w-full max-w-5xl h-auto bg-gray-50 ring-1 ring-gray-200 rounded-lg cursor-crosshair"
-              style={{ maxHeight: '35vh' }}
+              style={{ maxHeight: '35vh', display: canvasViewMode === '3d' ? 'none' : undefined }}
+              aria-hidden={canvasViewMode === '3d' ? true : undefined}
             >
               <defs>
                 <pattern id="smallGrid" width="1" height="1" patternUnits="userSpaceOnUse" x="-50" y="-25">
@@ -3679,7 +3691,6 @@ function App() {
                 </g>
               )}
             </svg>
-          )}
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-gray-500">

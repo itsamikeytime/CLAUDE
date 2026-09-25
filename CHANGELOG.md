@@ -1,5 +1,13 @@
 # MikeyTime Ring Studio changelog
 
+## v1.31
+
+### Fixed
+- **PNG and SVG export now work from the 3D view.** Both export the 2D blueprint; they used to do nothing unless the 2D view was showing.
+
+### Improved
+- Link previews and the browser-tab icon: the page now carries its title, description, preview image and favicon for sharing.
+
 ## v1.3
 
 ### New
