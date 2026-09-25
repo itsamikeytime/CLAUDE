@@ -1,0 +1,3620 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>MikeyTime Ring Studio</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+  :root { color-scheme: light; }
+  html, body { margin: 0; padding: 0; background: #f3f4f6; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+/* Inline icon shims standing in for lucide-react (not loadable as an ES import in a static page). */
+const IconBase = ({ children, className }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
+const Gem = (p) => <IconBase {...p}><path d="M6 3h12l4 6-10 12L2 9Z"/><path d="M11 3 8 9l4 12 4-12-3-6"/><path d="M2 9h20"/></IconBase>;
+const Layers = (p) => <IconBase {...p}><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></IconBase>;
+const Settings = (p) => <IconBase {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></IconBase>;
+const ArrowUpDown = (p) => <IconBase {...p}><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></IconBase>;
+const ZoomIn = (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></IconBase>;
+const Plus = (p) => <IconBase {...p}><path d="M5 12h14"/><path d="M12 5v14"/></IconBase>;
+const X = (p) => <IconBase {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconBase>;
+const AlignHorizontalJustifyCenter = (p) => <IconBase {...p}><rect x="9" y="5" width="6" height="14" rx="1"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h5"/><path d="M17 12h5"/></IconBase>;
+const CircleDot = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></IconBase>;
+const Download = (p) => <IconBase {...p}><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></IconBase>;
+const Upload = (p) => <IconBase {...p}><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></IconBase>;
+const AlertCircle = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></IconBase>;
+const Crown = (p) => <IconBase {...p}><path d="m2 8 4 3 6-8 6 8 4-3-2 12H4Z"/><path d="M4 20h16"/></IconBase>;
+const ImageIcon = (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></IconBase>;
+const FileCode2 = (p) => <IconBase {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 18-2-2 2-2"/><path d="m13 14 2 2-2 2"/></IconBase>;
+const Table = (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></IconBase>;
+const LinkIcon = (p) => <IconBase {...p}><path d="M9 17H7a5 5 0 0 1 0-10h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><path d="M8 12h8"/></IconBase>;
+const Type = (p) => <IconBase {...p}><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></IconBase>;
+const Box = (p) => <IconBase {...p}><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></IconBase>;
+const Eye = (p) => <IconBase {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></IconBase>;
+const Sparkles = (p) => <IconBase {...p}><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="m6 6 2.5 2.5"/><path d="m15.5 15.5 2.5 2.5"/><path d="m18 6-2.5 2.5"/><path d="m8.5 15.5-2.5 2.5"/></IconBase>;
+const Printer = (p) => <IconBase {...p}><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1"/><path d="M6 17v4h12v-4"/></IconBase>;
+const Compass = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="m14.5 9.5-2 5-5 2 2-5 5-2Z"/></IconBase>;
+const PackageCheck = (p) => <IconBase {...p}><path d="M21 8V5a1 1 0 0 0-.5-.9L12 1 3.5 4.1A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.9L12 23l3-1.5"/><path d="M3.3 6.6 12 11l8.7-4.4"/><path d="M12 22V11"/><path d="m17 17 2 2 4-4"/></IconBase>;
+const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
+const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
+
+const PRESET_STONES = {
+  'Diamond': '#fbfbfb', 'Ruby': '#e0115f', 'Sapphire': '#0f52ba',
+  'Emerald': '#50c878', 'Amethyst': '#9966cc', 'Aquamarine': '#9fd9d6',
+  'Pearl': '#eae0c8', 'Peridot': '#b4c424', 'Opal': '#f0ede5',
+  'Topaz': '#ffc87c', 'Garnet': '#7a171e', 'Citrine': '#e4d00a',
+  'Onyx': '#353839', 'Moissanite': '#f5f5dc', 'Morganite': '#ffc0cb',
+  'Turquoise': '#40e0d0', 'Jade': '#00a86b'
+};
+
+const SHAPE_RATIOS = {
+  'Round Brilliant': 1, 'Oval': 1.4, 'Cushion': 1,
+  'Emerald': 1.4, 'Princess': 1, 'Pear': 1.5,
+  'Radiant': 1.3, 'Marquise': 1.8, 'Asscher': 1,
+  'Heart': 1.0, 'Crescent Moon': 1.0, 'Hexagon': 1.0
+};
+
+const SETTING_STYLES = ['None', 'Flush', '4-Prong', '6-Prong', 'Bezel', 'V-Prong', 'Halo'];
+
+const RING_SIZES_MM = {
+  3: 14.07, 3.25: 14.27, 3.5: 14.48, 3.75: 14.68,
+  4: 14.88, 4.25: 15.09, 4.5: 15.29, 4.75: 15.49,
+  5: 15.70, 5.25: 15.90, 5.5: 16.10, 5.75: 16.31,
+  6: 16.51, 6.25: 16.71, 6.5: 16.92, 6.75: 17.12,
+  7: 17.32, 7.25: 17.53, 7.5: 17.73, 7.75: 17.93,
+  8: 18.14, 8.25: 18.34, 8.5: 18.54, 8.75: 18.75,
+  9: 18.95, 9.25: 19.15, 9.5: 19.35, 9.75: 19.56,
+  10: 19.76, 10.25: 19.96, 10.5: 20.17, 10.75: 20.37,
+  11: 20.57, 11.25: 20.78, 11.5: 20.98, 11.75: 21.18,
+  12: 21.39, 12.25: 21.59, 12.5: 21.79, 12.75: 22.00,
+  13: 22.20, 13.25: 22.40, 13.5: 22.61, 13.75: 22.81,
+  14: 23.01, 14.25: 23.22, 14.5: 23.42, 14.75: 23.62,
+  15: 23.83
+};
+
+const METAL_COLORS = {
+  gold: { gradient: 'url(#band-gold)', flat: '#d4af37', dark: '#a67c00', hex: '#d4af37' },
+  silver: { gradient: 'url(#band-silver)', flat: '#b5b6b8', dark: '#7a7b7d', hex: '#c0c2c4' },
+  black: { gradient: 'url(#band-black)', flat: '#333333', dark: '#111111', hex: '#333333' }
+};
+
+const RELIEF_HEIGHT_OPTIONS = Array.from({ length: 36 }, (_, i) => Number((i * 0.1).toFixed(1)));
+const SOCKET_DEPTH_OPTIONS = Array.from({ length: 27 }, (_, i) => Number((0.2 + i * 0.05).toFixed(2)));
+
+const ControlSlider = ({ label, icon: Icon, value, min, max, step = 0.25, onChange, unit = 'mm' }) => (
+  <div className="flex flex-col gap-1.5 mb-1">
+    <label className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+      {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
+      {label}
+    </label>
+    <div className="flex items-center gap-3">
+      <input
+        type="range" min={min} max={max} step={step} value={value === '' ? min : value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+      />
+      <div className="flex items-center bg-white border border-gray-200 rounded overflow-hidden focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 shrink-0">
+        <input
+          type="number" min={min} max={max} step={step} value={value}
+          onChange={(e) => { const val = e.target.value; onChange(val === '' ? '' : Number(val)); }}
+          onBlur={() => {
+            let finalVal = Number(value);
+            if (isNaN(finalVal) || value === '') finalVal = min;
+            else if (finalVal < min) finalVal = min;
+            else if (finalVal > max) finalVal = max;
+            onChange(finalVal);
+          }}
+          className="w-14 px-1.5 py-0.5 text-xs bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
+        />
+        <span className="text-[10px] font-bold text-gray-500 pr-1.5 bg-white">{unit}</span>
+      </div>
+    </div>
+  </div>
+);
+
+const CompactControl = ({ label, value, min, max, step = 0.25, onChange, disabled }) => (
+  <div className={`flex flex-col gap-1.5 ${disabled ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+      <div className="flex items-center border border-gray-200 rounded overflow-hidden bg-gray-50">
+        <input
+          type="number" min={min} max={max} step={step} value={value}
+          onChange={(e) => { const val = e.target.value; onChange(val === '' ? '' : Number(val)); }}
+          onBlur={() => {
+            let finalVal = Number(value);
+            if (isNaN(finalVal) || value === '') finalVal = min;
+            else if (finalVal < min) finalVal = min;
+            else if (finalVal > max) finalVal = max;
+            onChange(finalVal);
+          }}
+          disabled={disabled}
+          className="w-12 text-xs py-0.5 px-1 bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
+        />
+      </div>
+    </div>
+    <input
+      type="range" min={min} max={max} step={step} value={value === '' ? min : value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      disabled={disabled}
+      className="w-full h-1 bg-gray-200 rounded appearance-none cursor-pointer accent-emerald-500"
+    />
+  </div>
+);
+
+const getShapeOutlinePoints = (shape, hw, hh, steps = 96) => {
+  const pts = [];
+  const buildPolygon = (corners, totalSteps) => {
+    const p = [];
+    const nCorners = corners.length;
+    const baseSub = Math.max(2, Math.floor(totalSteps / nCorners));
+    for (let c = 0; c < nCorners; c++) {
+      const p1 = corners[c];
+      const p2 = corners[(c + 1) % nCorners];
+      for (let j = 0; j < baseSub; j++) {
+        const t = j / baseSub;
+        p.push({
+          x: p1.x + (p2.x - p1.x) * t,
+          y: p1.y + (p2.y - p1.y) * t,
+          isCorner: j === 0,
+          miterLimit: p1.miterLimit || 1.55
+        });
+      }
+    }
+    return p;
+  };
+
+  if (shape === 'Princess') {
+    return buildPolygon(
+      [
+        { x: -hw, y: -hh, miterLimit: 1.45 },
+        { x: hw, y: -hh, miterLimit: 1.45 },
+        { x: hw, y: hh, miterLimit: 1.45 },
+        { x: -hw, y: hh, miterLimit: 1.45 }
+      ],
+      steps
+    );
+  }
+  if (shape === 'Emerald' || shape === 'Radiant' || shape === 'Asscher') {
+    const ce = hw * (shape === 'Asscher' ? 0.5 : (shape === 'Radiant' ? 0.2 : 0.3));
+    return buildPolygon(
+      [
+        { x: -hw + ce, y: -hh, miterLimit: 1.22 }, { x: hw - ce, y: -hh, miterLimit: 1.22 },
+        { x: hw, y: -hh + ce, miterLimit: 1.22 }, { x: hw, y: hh - ce, miterLimit: 1.22 },
+        { x: hw - ce, y: hh, miterLimit: 1.22 }, { x: -hw + ce, y: hh, miterLimit: 1.22 },
+        { x: -hw, y: hh - ce, miterLimit: 1.22 }, { x: -hw, y: -hh + ce, miterLimit: 1.22 }
+      ],
+      steps
+    );
+  }
+  if (shape === 'Hexagon') {
+    const sx = hw * 0.866025;
+    return buildPolygon(
+      [
+        { x: 0, y: -hh, miterLimit: 1.28 }, { x: sx, y: -hh * 0.5, miterLimit: 1.28 },
+        { x: sx, y: hh * 0.5, miterLimit: 1.28 }, { x: 0, y: hh, miterLimit: 1.28 },
+        { x: -sx, y: hh * 0.5, miterLimit: 1.28 }, { x: -sx, y: -hh * 0.5, miterLimit: 1.28 }
+      ],
+      steps
+    );
+  }
+  if (shape === 'Cushion') {
+    const rx = hw * 0.4, linX = hw - rx, linY = hh - rx;
+    const seg = Math.max(4, Math.floor(steps / 8));
+    for (let j = 0; j < seg; j++) pts.push({ x: -linX + (2 * linX * j / seg), y: -hh });
+    for (let j = 0; j < seg; j++) { const a = -Math.PI / 2 + (Math.PI / 2 * j / seg); pts.push({ x: linX + rx * Math.cos(a), y: -linY + rx * Math.sin(a) }); }
+    for (let j = 0; j < seg; j++) pts.push({ x: hw, y: -linY + (2 * linY * j / seg) });
+    for (let j = 0; j < seg; j++) { const a = 0 + (Math.PI / 2 * j / seg); pts.push({ x: linX + rx * Math.cos(a), y: linY + rx * Math.sin(a) }); }
+    for (let j = 0; j < seg; j++) pts.push({ x: linX - (2 * linX * j / seg), y: hh });
+    for (let j = 0; j < seg; j++) { const a = Math.PI / 2 + (Math.PI / 2 * j / seg); pts.push({ x: -linX + rx * Math.cos(a), y: linY + rx * Math.sin(a) }); }
+    for (let j = 0; j < seg; j++) pts.push({ x: -hw, y: linY - (2 * linY * j / seg) });
+    for (let j = 0; j < seg; j++) { const a = Math.PI + (Math.PI / 2 * j / seg); pts.push({ x: -linX + rx * Math.cos(a), y: -linY + rx * Math.sin(a) }); }
+    return pts;
+  }
+
+  const half = Math.floor(steps / 2);
+  for (let i = 0; i < steps; i++) {
+    const t = (i / steps) * Math.PI * 2;
+    let x = 0, y = 0;
+    let isCorner = false;
+    let miterLimit = 1.45;
+
+    if (shape === 'Round Brilliant') {
+      x = hw * Math.cos(t);
+      y = hw * Math.sin(t);
+    } else if (shape === 'Oval') {
+      x = hw * Math.cos(t);
+      y = hh * Math.sin(t);
+    } else if (shape === 'Pear') {
+      if (i < half) {
+        const bt = i / half, u = 1 - bt;
+        x = 3 * u * u * bt * (hw * 1.15) + 3 * u * bt * bt * (hw * 1.15);
+        y = u * u * u * (-hh) + 3 * u * u * bt * (-hh * 0.1) + 3 * u * bt * bt * (hh) + bt * bt * bt * (hh);
+      } else {
+        const bt = (i - half) / (steps - half), u = 1 - bt;
+        x = 3 * u * u * bt * (-hw * 1.15) + 3 * u * bt * bt * (-hw * 1.15);
+        y = u * u * u * (hh) + 3 * u * u * bt * (hh) + 3 * u * bt * bt * (-hh * 0.1) + bt * bt * bt * (-hh);
+      }
+      isCorner = i === 0;
+      miterLimit = i === 0 ? 1.35 : 1.15;
+    } else if (shape === 'Marquise') {
+      if (i < half) {
+        const bt = i / half, u = 1 - bt;
+        x = 3 * u * u * bt * (hw * 1.1) + 3 * u * bt * bt * (hw * 1.1);
+        y = u * u * u * (-hh) + 3 * u * u * bt * (-hh * 0.3) + 3 * u * bt * bt * (hh * 0.3) + bt * bt * bt * (hh);
+      } else {
+        const bt = (i - half) / (steps - half), u = 1 - bt;
+        x = 3 * u * u * bt * (-hw * 1.1) + 3 * u * bt * bt * (-hw * 1.1);
+        y = u * u * u * (hh) + 3 * u * u * bt * (hh * 0.3) + 3 * u * bt * bt * (-hh * 0.3) + bt * bt * bt * (-hh);
+      }
+      isCorner = i === 0 || i === half;
+      miterLimit = isCorner ? 1.38 : 1.15;
+    } else if (shape === 'Heart') {
+      if (i < half) {
+        const bt = i / half, u = 1 - bt;
+        x = 3 * u * u * bt * (hw * 1.2) + 3 * u * bt * bt * (hw * 1.2);
+        y = u * u * u * (-hh * 0.2) + 3 * u * u * bt * (-hh * 1.2) + 3 * u * bt * bt * (hh * 0.4) + bt * bt * bt * (hh);
+      } else {
+        const bt = (i - half) / (steps - half), u = 1 - bt;
+        x = 3 * u * u * bt * (-hw * 1.2) + 3 * u * bt * bt * (-hw * 1.2);
+        y = u * u * u * (hh) + 3 * u * u * bt * (hh * 0.4) + 3 * u * bt * bt * (-hh * 1.2) + bt * bt * bt * (-hh * 0.2);
+      }
+      isCorner = i === 0 || i === half;
+      miterLimit = i === 0 ? 1.05 : (i === half ? 1.32 : 1.15);
+    } else if (shape === 'Crescent Moon') {
+      if (i < half) {
+        const t2 = (i / half) * Math.PI;
+        x = hw * Math.sin(t2) - hw * 0.25;
+        y = -hh * Math.cos(t2);
+      } else {
+        const a = Math.PI * (1 - ((i - half) / (steps - half)));
+        x = hw * 0.5 * Math.sin(a) - hw * 0.25;
+        y = -hh * Math.cos(a);
+      }
+      isCorner = i === 0 || i === half;
+      miterLimit = isCorner ? 1.22 : 1.12;
+    } else {
+      x = hw * Math.cos(t);
+      y = hw * Math.sin(t);
+    }
+    pts.push({ x, y, isCorner, miterLimit });
+  }
+  return pts;
+};
+
+const offsetPolygon2D = (pts, offsetDist, shape = 'Round Brilliant') => {
+  const n = pts.length;
+  if (n < 3 || Math.abs(offsetDist) < 1e-6) return pts.map(p => ({ x: p.x, y: p.y }));
+
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    area += (p1.x * p2.y - p2.x * p1.y);
+  }
+  const sign = area >= 0 ? 1 : -1;
+  const half = Math.floor(n / 2);
+
+  const offsetPts = [];
+  for (let i = 0; i < n; i++) {
+    const pPrev = pts[(i - 1 + n) % n];
+    const pCurr = pts[i];
+    const pNext = pts[(i + 1) % n];
+
+    if (shape === 'Pear' && i === 0) {
+      offsetPts.push({ x: pCurr.x, y: pCurr.y - offsetDist * 1.28 });
+      continue;
+    }
+    if (shape === 'Marquise' && (i === 0 || i === half)) {
+      const dirY = i === 0 ? -1 : 1;
+      offsetPts.push({ x: pCurr.x, y: pCurr.y + dirY * offsetDist * 1.32 });
+      continue;
+    }
+    if (shape === 'Heart' && (i === 0 || i === half)) {
+      if (i === 0) {
+        offsetPts.push({ x: pCurr.x, y: pCurr.y - offsetDist * 0.92 });
+      } else {
+        offsetPts.push({ x: pCurr.x, y: pCurr.y + offsetDist * 1.28 });
+      }
+      continue;
+    }
+    if (shape === 'Crescent Moon' && (i === 0 || i === half)) {
+      const dirY = i === 0 ? -1 : 1;
+      offsetPts.push({
+        x: pCurr.x - offsetDist * 0.42,
+        y: pCurr.y + dirY * offsetDist * 1.15
+      });
+      continue;
+    }
+
+    let dx1 = pCurr.x - pPrev.x, dy1 = pCurr.y - pPrev.y;
+    const len1 = Math.hypot(dx1, dy1) || 1;
+    dx1 /= len1; dy1 /= len1;
+
+    let dx2 = pNext.x - pCurr.x, dy2 = pNext.y - pCurr.y;
+    const len2 = Math.hypot(dx2, dy2) || 1;
+    dx2 /= len2; dy2 /= len2;
+
+    const n1x = sign * dy1, n1y = -sign * dx1;
+    const n2x = sign * dy2, n2y = -sign * dx2;
+
+    let mx = n1x + n2x;
+    let my = n1y + n2y;
+    const mLen = Math.hypot(mx, my);
+    if (mLen < 1e-5) {
+      mx = n1x;
+      my = n1y;
+    } else {
+      mx /= mLen;
+      my /= mLen;
+    }
+
+    const dot = mx * n1x + my * n1y;
+    const maxMiter = pCurr.miterLimit || 1.45;
+    const miterScale = Math.min(maxMiter, 1 / Math.max(0.42, dot));
+    offsetPts.push({
+      x: pCurr.x + mx * offsetDist * miterScale,
+      y: pCurr.y + my * offsetDist * miterScale
+    });
+  }
+  return offsetPts;
+};
+
+const pointsToSVGPath = (pts) => {
+  if (!pts || pts.length === 0) return '';
+  return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(4)} ${p.y.toFixed(4)}`).join(' ') + ' Z';
+};
+
+const getHaloData = (shape, hw, hh, haloSize) => {
+  const pts = getShapeOutlinePoints(shape, hw, hh, 120);
+  const offset = (haloSize / 2) + 0.15;
+  const offsetPts = offsetPolygon2D(pts, offset, shape);
+  const steps = offsetPts.length;
+
+  let perim = 0;
+  const dists = [0];
+  for (let i = 1; i <= steps; i++) {
+    const p1 = offsetPts[i - 1], p2 = offsetPts[i % steps];
+    perim += Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+    dists.push(perim);
+  }
+
+  const stoneSpacing = haloSize + 0.05;
+  let numStones = Math.floor(perim / stoneSpacing);
+  if (numStones < 4) numStones = 4;
+  const actualSpacing = perim / numStones;
+  const stones = [];
+
+  for (let i = 0; i < numStones; i++) {
+    const target = i * actualSpacing;
+    let idx = 0;
+    while (idx < steps && dists[idx + 1] <= target) idx++;
+    const p1 = offsetPts[idx % steps], p2 = offsetPts[(idx + 1) % steps];
+    const seg = dists[idx + 1] - dists[idx];
+    const t = seg > 0 ? (target - dists[idx]) / seg : 0;
+    stones.push({ x: p1.x + (p2.x - p1.x) * t, y: p1.y + (p2.y - p1.y) * t });
+  }
+
+  return { stones, numStones, offsetPts };
+};
+
+const getProngPositions = (style, shape, hw, hh) => {
+  if (style === '4-Prong') {
+    if (shape === 'Pear') return [{ x: 0, y: -hh * 0.9 }, { x: -hw * 0.85, y: 0 }, { x: hw * 0.85, y: 0 }, { x: 0, y: hh * 0.9 }];
+    if (shape === 'Marquise') return [{ x: -hw * 0.65, y: -hh * 0.35 }, { x: hw * 0.65, y: -hh * 0.35 }, { x: -hw * 0.65, y: hh * 0.35 }, { x: hw * 0.65, y: hh * 0.35 }];
+    if (shape === 'Heart') return [{ x: -hw * 0.75, y: -hh * 0.5 }, { x: hw * 0.75, y: -hh * 0.5 }, { x: -hw * 0.15, y: hh * 0.8 }, { x: hw * 0.15, y: hh * 0.8 }];
+    if (shape === 'Crescent Moon') return [{ x: -hw * 0.05, y: -hh * 0.8 }, { x: hw * 0.7, y: -hh * 0.15 }, { x: hw * 0.7, y: hh * 0.15 }, { x: -hw * 0.05, y: hh * 0.8 }];
+    if (shape === 'Hexagon') {
+      const sx = hw * 0.866025;
+      return [{ x: -sx, y: -hh * 0.6 }, { x: sx, y: -hh * 0.6 }, { x: -sx, y: hh * 0.6 }, { x: sx, y: hh * 0.6 }];
+    }
+    if (['Emerald', 'Radiant', 'Asscher', 'Cushion', 'Princess'].includes(shape)) {
+      return [{ x: -hw * 0.85, y: -hh * 0.85 }, { x: hw * 0.85, y: -hh * 0.85 }, { x: -hw * 0.85, y: hh * 0.85 }, { x: hw * 0.85, y: hh * 0.85 }];
+    }
+    return [{ x: -hw * 0.65, y: -hh * 0.65 }, { x: hw * 0.65, y: -hh * 0.65 }, { x: -hw * 0.65, y: hh * 0.65 }, { x: hw * 0.65, y: hh * 0.65 }];
+  }
+
+  if (style === '6-Prong') {
+    if (shape === 'Heart') {
+      return [
+        { x: 0, y: -hh * 0.1 }, { x: -hw * 0.8, y: -hh * 0.6 }, { x: hw * 0.8, y: -hh * 0.6 },
+        { x: -hw * 0.7, y: hh * 0.3 }, { x: hw * 0.7, y: hh * 0.3 }, { x: 0, y: hh * 0.95 }
+      ];
+    }
+    if (shape === 'Crescent Moon') {
+      return [
+        { x: -hw * 0.2, y: -hh * 0.9 }, { x: -hw * 0.2, y: hh * 0.9 }, { x: hw * 0.4, y: -hh * 0.5 },
+        { x: hw * 0.4, y: hh * 0.5 }, { x: -hw * 0.15, y: 0 }, { x: hw * 0.65, y: 0 }
+      ];
+    }
+    if (shape === 'Hexagon') {
+      const sx = hw * 0.866025;
+      return [
+        { x: 0, y: -hh * 0.95 }, { x: sx * 0.95, y: -hh * 0.475 }, { x: sx * 0.95, y: hh * 0.475 },
+        { x: 0, y: hh * 0.95 }, { x: -sx * 0.95, y: hh * 0.475 }, { x: -sx * 0.95, y: -hh * 0.475 }
+      ];
+    }
+    if (shape === 'Pear') {
+      return [
+        { x: 0, y: -hh * 0.95 }, { x: -hw * 0.55, y: -hh * 0.45 }, { x: hw * 0.55, y: -hh * 0.45 },
+        { x: -hw * 0.85, y: hh * 0.35 }, { x: hw * 0.85, y: hh * 0.35 }, { x: 0, y: hh * 0.95 }
+      ];
+    }
+    if (shape === 'Marquise') {
+      return [
+        { x: 0, y: -hh * 0.95 }, { x: 0, y: hh * 0.95 }, { x: -hw * 0.75, y: -hh * 0.25 },
+        { x: hw * 0.75, y: -hh * 0.25 }, { x: -hw * 0.75, y: hh * 0.25 }, { x: hw * 0.75, y: hh * 0.25 }
+      ];
+    }
+    if (['Emerald', 'Radiant', 'Asscher', 'Princess', 'Cushion'].includes(shape)) {
+      return [
+        { x: -hw * 0.4, y: -hh * 0.95 }, { x: hw * 0.4, y: -hh * 0.95 },
+        { x: -hw * 0.4, y: hh * 0.95 }, { x: hw * 0.4, y: hh * 0.95 },
+        { x: -hw * 0.95, y: 0 }, { x: hw * 0.95, y: 0 }
+      ];
+    }
+    return [30, 90, 150, 210, 270, 330].map(angle => {
+      const rad = (angle * Math.PI) / 180;
+      return { x: Math.cos(rad) * hw * 0.95, y: Math.sin(rad) * hh * 0.95 };
+    });
+  }
+
+  return [];
+};
+
+const getVProngData = (shape, hw, hh) => {
+  const vSize = hw * 0.35;
+  const isSquare = ['Princess', 'Asscher', 'Emerald', 'Radiant', 'Cushion'].includes(shape);
+
+  if (isSquare) {
+    return {
+      chevrons: [
+        { a: { x: -hw, y: -hh + vSize }, v: { x: -hw, y: -hh }, b: { x: -hw + vSize, y: -hh } },
+        { a: { x: hw - vSize, y: -hh }, v: { x: hw, y: -hh }, b: { x: hw, y: -hh + vSize } },
+        { a: { x: hw, y: hh - vSize }, v: { x: hw, y: hh }, b: { x: hw - vSize, y: hh } },
+        { a: { x: -hw + vSize, y: hh }, v: { x: -hw, y: hh }, b: { x: -hw, y: hh - vSize } }
+      ],
+      roundProngs: []
+    };
+  }
+
+  if (shape === 'Hexagon') {
+    const sx = hw * 0.866025;
+    return {
+      chevrons: [
+        { a: { x: -sx * 0.32, y: -hh + hh * 0.16 }, v: { x: 0, y: -hh }, b: { x: sx * 0.32, y: -hh + hh * 0.16 } },
+        { a: { x: sx * 0.32, y: hh - hh * 0.16 }, v: { x: 0, y: hh }, b: { x: -sx * 0.32, y: hh - hh * 0.16 } }
+      ],
+      roundProngs: [
+        { x: -sx * 0.85, y: -hh * 0.425 },
+        { x: sx * 0.85, y: -hh * 0.425 },
+        { x: -sx * 0.85, y: hh * 0.425 },
+        { x: sx * 0.85, y: hh * 0.425 }
+      ]
+    };
+  }
+
+  if (shape === 'Marquise') {
+    return {
+      chevrons: [
+        { a: { x: -hw * 0.32, y: -hh + hw * 0.32 }, v: { x: 0, y: -hh }, b: { x: hw * 0.32, y: -hh + hw * 0.32 } },
+        { a: { x: hw * 0.32, y: hh - hw * 0.32 }, v: { x: 0, y: hh }, b: { x: -hw * 0.32, y: hh - hw * 0.32 } }
+      ],
+      roundProngs: [
+        { x: -hw * 0.75, y: -hh * 0.3 },
+        { x: hw * 0.75, y: -hh * 0.3 },
+        { x: -hw * 0.75, y: hh * 0.3 },
+        { x: hw * 0.75, y: hh * 0.3 }
+      ]
+    };
+  }
+
+  if (shape === 'Pear') {
+    return {
+      chevrons: [
+        { a: { x: -hw * 0.32, y: -hh + hw * 0.32 }, v: { x: 0, y: -hh }, b: { x: hw * 0.32, y: -hh + hw * 0.32 } }
+      ],
+      roundProngs: [
+        { x: -hw * 0.65, y: hh * 0.65 },
+        { x: hw * 0.65, y: hh * 0.65 }
+      ]
+    };
+  }
+
+  if (shape === 'Heart') {
+    return {
+      chevrons: [
+        { a: { x: hw * 0.24, y: hh - hw * 0.24 }, v: { x: 0, y: hh * 0.98 }, b: { x: -hw * 0.24, y: hh - hw * 0.24 } }
+      ],
+      roundProngs: [
+        { x: -hw * 0.8, y: -hh * 0.5 },
+        { x: hw * 0.8, y: -hh * 0.5 }
+      ]
+    };
+  }
+
+  if (shape === 'Crescent Moon') {
+    return {
+      chevrons: [
+        { a: { x: -hw * 0.08, y: -hh + hw * 0.22 }, v: { x: -hw * 0.22, y: -hh * 0.96 }, b: { x: 0.04 * hw, y: -hh * 0.82 } },
+        { a: { x: 0.04 * hw, y: hh * 0.82 }, v: { x: -hw * 0.22, y: hh * 0.96 }, b: { x: -hw * 0.08, y: hh - hw * 0.22 } }
+      ],
+      roundProngs: [
+        { x: hw * 0.7, y: -hh * 0.15 },
+        { x: hw * 0.7, y: hh * 0.15 }
+      ]
+    };
+  }
+
+  const cx = hw * 0.7071;
+  const cy = hh * 0.7071;
+  const arm = Math.min(hw, hh) * 0.28;
+  return {
+    chevrons: [
+      { a: { x: -cx - arm * 0.2, y: -cy + arm }, v: { x: -cx, y: -cy }, b: { x: -cx + arm, y: -cy - arm * 0.2 } },
+      { a: { x: cx - arm, y: -cy - arm * 0.2 }, v: { x: cx, y: -cy }, b: { x: cx + arm * 0.2, y: -cy + arm } },
+      { a: { x: cx + arm * 0.2, y: cy - arm }, v: { x: cx, y: cy }, b: { x: cx - arm, y: cy + arm * 0.2 } },
+      { a: { x: -cx + arm, y: cy + arm * 0.2 }, v: { x: -cx, y: cy }, b: { x: -cx - arm * 0.2, y: cy - arm } }
+    ],
+    roundProngs: []
+  };
+};
+
+const signedDistanceToPolygon2D = (u, v, poly) => {
+  let inside = false;
+  let minDistSq = Infinity;
+  const n = poly.length;
+
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i].u, yi = poly[i].v;
+    const xj = poly[j].u, yj = poly[j].v;
+
+    const intersect = ((yi > v) !== (yj > v)) && (u < ((xj - xi) * (v - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+
+    const dx = xj - xi, dy = yj - yi;
+    const lenSq = dx * dx + dy * dy || 1e-9;
+    let t = ((u - xi) * dx + (v - yi) * dy) / lenSq;
+    if (t < 0) t = 0;
+    else if (t > 1) t = 1;
+    const px = xi + t * dx, py = yi + t * dy;
+    const distSq = (u - px) * (u - px) + (v - py) * (v - py);
+    if (distSq < minDistSq) minDistSq = distSq;
+  }
+
+  const dist = Math.sqrt(minDistSq);
+  return inside ? -dist : dist;
+};
+
+const projectPointToPolygonContour2D = (u, v, poly) => {
+  let bestX = u, bestY = v, minDistSq = Infinity;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i].u, yi = poly[i].v;
+    const xj = poly[j].u, yj = poly[j].v;
+    const dx = xj - xi, dy = yj - yi;
+    const lenSq = dx * dx + dy * dy || 1e-9;
+    let t = ((u - xi) * dx + (v - yi) * dy) / lenSq;
+    if (t < 0) t = 0;
+    else if (t > 1) t = 1;
+    const px = xi + t * dx, py = yi + t * dy;
+    const dSq = (u - px) * (u - px) + (v - py) * (v - py);
+    if (dSq < minDistSq) {
+      minDistSq = dSq;
+      bestX = px;
+      bestY = py;
+    }
+  }
+  return { u: bestX, v: bestY };
+};
+
+const build3DRingShells = ({
+  renderedStones,
+  bandWidth,
+  bandColor,
+  ringSize,
+  bandThickness,
+  gemRelief,
+  pocketDepthInput,
+  uniqueStone3D,
+  include3DSettings,
+  cutoutMode = 'pocket_and_gem'
+}) => {
+  const innerDiameter = RING_SIZES_MM[ringSize] || (11.63 + Number(ringSize) * 0.8128);
+  const innerRadius = innerDiameter / 2;
+  const thickness = Math.max(1.2, Number(bandThickness) || 1.8);
+  const outerRadius = innerRadius + thickness;
+  const bw = Number(bandWidth) || 4;
+  const halfW = bw / 2;
+  const safeRimV = Math.max(0.2, halfW - 0.18);
+  const globalRelief = Number(gemRelief ?? 1.2);
+  const globalPocketDepth = Math.min(thickness * 0.72, Math.max(0.2, Number(pocketDepthInput) || 0.75));
+  const defaultRFloor = outerRadius - globalPocketDepth;
+
+  // Cylindrical wrap used ONLY for the band shell itself (outer surface, pocket
+  // floors/walls, inner bore): one shared reference radius (outerRadius) keeps
+  // every layer of the band perfectly concentric and watertight.
+  const wrapPoint = (u, v, h) => {
+    const theta = u / outerRadius;
+    return {
+      x: h * Math.sin(theta),
+      y: -v,
+      z: h * Math.cos(theta)
+    };
+  };
+
+  const computeNormal = (v1, v2, v3) => {
+    const ux = v2.x - v1.x, uy = v2.y - v1.y, uz = v2.z - v1.z;
+    const vx = v3.x - v1.x, vy = v3.y - v1.y, vz = v3.z - v1.z;
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    return { x: nx / len, y: ny / len, z: nz / len };
+  };
+
+  // Flat tangent-plane placement for gems and prong/V-Prong metal, used
+  // instead of wrapPoint for anything that should sit on the band as a rigid
+  // rounded/flat object rather than bend to follow its curvature.
+  //
+  // wrapPoint(u, v, h) computes an angle theta = u / outerRadius from a FIXED
+  // reference radius, then places the point at radius h. Whenever h differs
+  // from outerRadius (which is every gem facet above/below the band surface),
+  // the tangential (tangent u) direction gets scaled by (h / outerRadius)
+  // while the v (band-width) direction is untouched - an anisotropic stretch
+  // that turns round outlines into ovals and bends every flat facet into an
+  // arc. Using theta = u / h instead (a per-point local wrap) fixes the
+  // stretching but reintroduces curvature, since each ring at a different h
+  // ends up bent by a different amount and the layers drift apart.
+  //
+  // The actual fix: build ONE flat 3D coordinate frame per stone, tangent to
+  // the band at that stone's own center point, then place every vertex of
+  // that stone/setting (root, girdle, table - every layer) inside that same
+  // flat plane, offsetting only along the frame's outward normal for
+  // elevation. The whole piece stays perfectly flat/rigid and undistorted,
+  // and is simply positioned + tilted once to sit at the right spot on the
+  // ring - exactly like a real stone glued onto a domed surface.
+  const makeFlatFrame = (centerU, centerV) => {
+    const theta0 = centerU / outerRadius;
+    const sinT = Math.sin(theta0), cosT = Math.cos(theta0);
+    return {
+      center: { x: outerRadius * sinT, y: -centerV, z: outerRadius * cosT },
+      tangent: { x: cosT, y: 0, z: -sinT },
+      vAxis: { x: 0, y: -1, z: 0 },
+      normal: { x: sinT, y: 0, z: cosT },
+      centerU, centerV
+    };
+  };
+
+  const placeFlat = (frame, u, v, h) => {
+    const du = u - frame.centerU;
+    const dv = v - frame.centerV;
+    const e = h - outerRadius;
+    return {
+      x: frame.center.x + du * frame.tangent.x + dv * frame.vAxis.x + e * frame.normal.x,
+      y: frame.center.y + du * frame.tangent.y + dv * frame.vAxis.y + e * frame.normal.y,
+      z: frame.center.z + du * frame.tangent.z + dv * frame.vAxis.z + e * frame.normal.z
+    };
+  };
+
+  const preparedStones = renderedStones.map((stone) => {
+    const w = Number(stone.width) || 4;
+    const shape = stone.shape || 'Round Brilliant';
+    const ratio = SHAPE_RATIOS[shape] || 1;
+    const h = w * ratio;
+    const hw = w / 2;
+    const hh = h / 2;
+    const rot = Number(stone.rotation) || 0;
+    const rad = (rot * Math.PI) / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+
+    const outlinePts = getShapeOutlinePoints(shape, hw, hh, 96);
+
+    const resolvedRelief = (uniqueStone3D && stone.reliefOverride !== undefined && stone.reliefOverride !== null && stone.reliefOverride !== '')
+      ? Number(stone.reliefOverride)
+      : globalRelief;
+
+    const resolvedPocketDepthRaw = (uniqueStone3D && stone.pocketDepthOverride !== undefined && stone.pocketDepthOverride !== null && stone.pocketDepthOverride !== '')
+      ? Number(stone.pocketDepthOverride)
+      : globalPocketDepth;
+
+    const stonePocketDepth = Math.min(thickness * 0.78, Math.max(0.2, resolvedPocketDepthRaw));
+    const stoneRFloor = outerRadius - stonePocketDepth;
+
+    const isFlushStone = stone.settingStyle === 'Flush' || resolvedRelief <= 0.01;
+    const effectiveRelief = stone.settingStyle === 'Flush' ? 0 : resolvedRelief;
+    const pocketCutScale = isFlushStone ? ((hw + 0.12) / Math.max(0.2, hw)) : 1.015;
+
+    const toWorldUV = (pt, scale = 1) => {
+      const sx = pt.x * scale;
+      const sy = pt.y * scale;
+      const rawU = stone.x + (sx * cosR - sy * sinR);
+      const rawV = stone.y + (sx * sinR + sy * cosR);
+      return {
+        u: rawU,
+        v: Math.max(-safeRimV, Math.min(safeRimV, rawV)),
+        isCorner: pt.isCorner
+      };
+    };
+
+    const cutContourUV = outlinePts.map(pt => toWorldUV(pt, pocketCutScale));
+    const cornerUVs = cutContourUV.filter(pt => pt.isCorner);
+
+    return {
+      ...stone,
+      w, h, hw, hh, rot,
+      cosR, sinR,
+      maxRadius: Math.max(hw, hh) * pocketCutScale + 0.45,
+      outlinePts,
+      cutContourUV,
+      cornerUVs,
+      isFlushStone,
+      effectiveRelief,
+      stonePocketDepth,
+      stoneRFloor
+    };
+  });
+
+  const carveBandPockets = cutoutMode !== 'solid_band' && preparedStones.length > 0;
+
+  const evalPocketSignedDist = (u, v) => {
+    if (!carveBandPockets) return { d: 10, stone: null };
+    const rimDist = safeRimV - Math.abs(v);
+    if (rimDist < 0) return { d: -rimDist + 0.05, stone: null };
+
+    let minD = Infinity;
+    let closestStone = null;
+    for (let i = 0; i < preparedStones.length; i++) {
+      const st = preparedStones[i];
+      const dx = u - st.x, dy = v - st.y;
+      const boundD = Math.sqrt(dx * dx + dy * dy) - st.maxRadius;
+      if (boundD > minD) continue;
+      const d = signedDistanceToPolygon2D(u, v, st.cutContourUV);
+      if (d < minD) {
+        minD = d;
+        closestStone = st;
+      }
+    }
+    return { d: Math.max(minD, -rimDist), stone: closestStone };
+  };
+
+  const shells = [];
+
+  const bandTris = [];
+  const pushBandTri = (p1, p2, p3, shadeTag = 'band') => {
+    bandTris.push({
+      v1: p1,
+      v2: p2,
+      v3: p3,
+      normal: computeNormal(p1, p2, p3),
+      shadeTag
+    });
+  };
+
+  const circumference = 2 * Math.PI * outerRadius;
+  const halfCirc = circumference / 2;
+
+  let minStoneU = -8, maxStoneU = 8;
+  if (preparedStones.length > 0) {
+    minStoneU = Math.min(...preparedStones.map(s => s.x - s.maxRadius - 0.9));
+    maxStoneU = Math.max(...preparedStones.map(s => s.x + s.maxRadius + 0.9));
+  }
+  minStoneU = Math.max(-halfCirc + 1, minStoneU);
+  maxStoneU = Math.min(halfCirc - 1, maxStoneU);
+
+  const uSamples = [];
+  const backLeftSteps = 30;
+  for (let i = 0; i < backLeftSteps; i++) {
+    uSamples.push(-halfCirc + ((minStoneU - (-halfCirc)) * i) / backLeftSteps);
+  }
+  const crownStepSize = carveBandPockets ? 0.16 : 0.65;
+  const crownSteps = Math.max(36, Math.min(260, Math.ceil((maxStoneU - minStoneU) / crownStepSize)));
+  for (let i = 0; i < crownSteps; i++) {
+    uSamples.push(minStoneU + ((maxStoneU - minStoneU) * i) / crownSteps);
+  }
+  const backRightSteps = 30;
+  for (let i = 0; i < backRightSteps; i++) {
+    uSamples.push(maxStoneU + ((halfCirc - maxStoneU) * i) / backRightSteps);
+  }
+
+  const vSteps = carveBandPockets ? Math.max(28, Math.min(56, Math.ceil(bw / 0.14))) : 4;
+  const vSamples = [];
+  for (let j = 0; j <= vSteps; j++) {
+    vSamples.push(-halfW + (bw * j) / vSteps);
+  }
+
+  const numU = uSamples.length;
+  const numV = vSteps + 1;
+
+  const gridUV = new Array(numU * numV);
+  const gridDist = new Float32Array(numU * numV);
+  const gridOutVerts = new Array(numU * numV);
+  const gridFlrVerts = new Array(numU * numV);
+  const gridInVerts = new Array(numU * numV);
+
+  for (let i = 0; i < numU; i++) {
+    const baseU = uSamples[i];
+    const inCrown = carveBandPockets && baseU >= minStoneU && baseU <= maxStoneU;
+    for (let j = 0; j < numV; j++) {
+      const idx = i * numV + j;
+      let u = baseU;
+      let v = vSamples[j];
+      let d = 10;
+      let localRFloor = defaultRFloor;
+
+      if (inCrown && j > 0 && j < vSteps) {
+        const res = evalPocketSignedDist(u, v);
+        d = res.d;
+        if (res.stone) {
+          localRFloor = res.stone.stoneRFloor;
+        }
+        if (Math.abs(d) < 0.032 && res.stone) {
+          let snapped = projectPointToPolygonContour2D(u, v, res.stone.cutContourUV);
+          for (let c = 0; c < res.stone.cornerUVs.length; c++) {
+            const cPt = res.stone.cornerUVs[c];
+            if (Math.hypot(u - cPt.u, v - cPt.v) < 0.09) {
+              snapped = { u: cPt.u, v: cPt.v };
+              break;
+            }
+          }
+          u = snapped.u;
+          v = Math.max(-safeRimV, Math.min(safeRimV, snapped.v));
+          d = 0;
+        }
+      }
+
+      gridUV[idx] = { u, v, idx, rFloor: localRFloor };
+      gridDist[idx] = d;
+      gridOutVerts[idx] = wrapPoint(u, v, outerRadius);
+      gridFlrVerts[idx] = wrapPoint(u, v, localRFloor);
+      if (j === 0 || j === vSteps) {
+        gridInVerts[idx] = wrapPoint(u, v, innerRadius);
+      }
+    }
+  }
+
+  const edgeCrossingCache = new Map();
+  const getCanonicalEdgeCrossing = (idxA, idxB) => {
+    const minId = idxA < idxB ? idxA : idxB;
+    const maxId = idxA < idxB ? idxB : idxA;
+    const key = `${minId}_${maxId}`;
+    let cached = edgeCrossingCache.get(key);
+    if (cached) return cached;
+
+    const uvA = gridUV[minId], uvB = gridUV[maxId];
+    const dA = gridDist[minId], dB = gridDist[maxId];
+    const denom = dA - dB;
+    let t = Math.abs(denom) > 1e-8 ? (dA / denom) : 0.5;
+    if (t < 0) t = 0;
+    else if (t > 1) t = 1;
+
+    let lo = 0, hi = 1;
+    for (let step = 0; step < 6; step++) {
+      const mid = 0.5 * (lo + hi);
+      const mu = uvA.u + (uvB.u - uvA.u) * mid;
+      const mv = uvA.v + (uvB.v - uvA.v) * mid;
+      const md = evalPocketSignedDist(mu, mv).d;
+      if ((dA >= 0 && md >= 0) || (dA < 0 && md < 0)) lo = mid;
+      else hi = mid;
+      t = 0.5 * (lo + hi);
+    }
+
+    let cu = uvA.u + (uvB.u - uvA.u) * t;
+    let cv = uvA.v + (uvB.v - uvA.v) * t;
+    const hint = evalPocketSignedDist(cu, cv).stone;
+    const crossRFloor = hint ? hint.stoneRFloor : defaultRFloor;
+    if (hint && hint.cutContourUV) {
+      const proj = projectPointToPolygonContour2D(cu, cv, hint.cutContourUV);
+      cu = proj.u;
+      cv = Math.max(-safeRimV, Math.min(safeRimV, proj.v));
+    }
+
+    cached = {
+      out: wrapPoint(cu, cv, outerRadius),
+      flr: wrapPoint(cu, cv, crossRFloor)
+    };
+    edgeCrossingCache.set(key, cached);
+    return cached;
+  };
+
+  const emitWeldedCrownTriangle = (id0, id1, id2) => {
+    const d0 = gridDist[id0], d1 = gridDist[id1], d2 = gridDist[id2];
+    const out0 = d0 >= 0, out1 = d1 >= 0, out2 = d2 >= 0;
+    const outCount = (out0 ? 1 : 0) + (out1 ? 1 : 0) + (out2 ? 1 : 0);
+
+    if (outCount === 3) {
+      pushBandTri(gridOutVerts[id0], gridOutVerts[id1], gridOutVerts[id2], 'band');
+      return;
+    }
+    if (outCount === 0) {
+      pushBandTri(gridFlrVerts[id0], gridFlrVerts[id1], gridFlrVerts[id2], 'pocket_floor');
+      return;
+    }
+
+    const ids = [id0, id1, id2];
+    const outs = [out0, out1, out2];
+
+    if (outCount === 1) {
+      const k0 = outs.indexOf(true);
+      const k1 = (k0 + 1) % 3;
+      const k2 = (k0 + 2) % 3;
+      const v0 = ids[k0], v1 = ids[k1], v2 = ids[k2];
+
+      const c01 = getCanonicalEdgeCrossing(v0, v1);
+      const c02 = getCanonicalEdgeCrossing(v0, v2);
+
+      pushBandTri(gridOutVerts[v0], c01.out, c02.out, 'band');
+      pushBandTri(c01.out, c02.out, c02.flr, 'pocket_wall');
+      pushBandTri(c01.out, c02.flr, c01.flr, 'pocket_wall');
+      pushBandTri(c01.flr, gridFlrVerts[v1], gridFlrVerts[v2], 'pocket_floor');
+      pushBandTri(c01.flr, gridFlrVerts[v2], c02.flr, 'pocket_floor');
+    } else {
+      const kIn = outs.indexOf(false);
+      const k1 = (kIn + 1) % 3;
+      const k2 = (kIn + 2) % 3;
+      const vIn = ids[kIn], v1 = ids[k1], v2 = ids[k2];
+
+      const c1 = getCanonicalEdgeCrossing(v1, vIn);
+      const c2 = getCanonicalEdgeCrossing(v2, vIn);
+
+      pushBandTri(gridOutVerts[v1], gridOutVerts[v2], c2.out, 'band');
+      pushBandTri(gridOutVerts[v1], c2.out, c1.out, 'band');
+      pushBandTri(c2.out, c1.out, c1.flr, 'pocket_wall');
+      pushBandTri(c2.out, c1.flr, c2.flr, 'pocket_wall');
+      pushBandTri(gridFlrVerts[vIn], c1.flr, c2.flr, 'pocket_floor');
+    }
+  };
+
+  for (let i = 0; i < numU; i++) {
+    const iNext = (i + 1) % numU;
+    for (let j = 0; j < vSteps; j++) {
+      const id11 = i * numV + j;
+      const id21 = iNext * numV + j;
+      const id22 = iNext * numV + (j + 1);
+      const id12 = i * numV + (j + 1);
+
+      emitWeldedCrownTriangle(id11, id22, id21);
+      emitWeldedCrownTriangle(id11, id12, id22);
+    }
+
+    const in1Top = gridInVerts[i * numV];
+    const in2Top = gridInVerts[iNext * numV];
+    const in2Bot = gridInVerts[iNext * numV + vSteps];
+    const in1Bot = gridInVerts[i * numV + vSteps];
+    pushBandTri(in1Top, in2Top, in2Bot, 'band');
+    pushBandTri(in1Top, in2Bot, in1Bot, 'band');
+
+    const out1Top = gridOutVerts[i * numV];
+    const out2Top = gridOutVerts[iNext * numV];
+    pushBandTri(out1Top, out2Top, in2Top, 'band');
+    pushBandTri(out1Top, in2Top, in1Top, 'band');
+
+    const out1Bot = gridOutVerts[i * numV + vSteps];
+    const out2Bot = gridOutVerts[iNext * numV + vSteps];
+    pushBandTri(out2Bot, out1Bot, in1Bot, 'band');
+    pushBandTri(out2Bot, in1Bot, in2Bot, 'band');
+  }
+
+  shells.push({
+    name: 'Part_01_Ring_Band_With_Sockets',
+    role: 'Band (Single Watertight Shell)',
+    color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+    isMetal: true,
+    triangles: bandTris
+  });
+
+  // Faceted gem/prong-ball builder: uses ONE flat frame centered on the
+  // shape's own (centerU, centerV) so the crown/girdle/root layers of a
+  // round stone (or a prong tip) stay a true rigid rounded shape - never
+  // bent to follow the band curvature underneath it.
+  const buildFacetedCrownShell = (pts2D, centerU, centerV, rotDeg, rRoot, rGirdle, rTable, tableScale) => {
+    const rad = (rotDeg * Math.PI) / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const n = pts2D.length;
+    const frame = makeFlatFrame(centerU, centerV);
+
+    const transform2D = (pt, scale = 1) => {
+      const sx = pt.x * scale;
+      const sy = pt.y * scale;
+      return {
+        u: centerU + (sx * cosR - sy * sinR),
+        v: centerV + (sx * sinR + sy * cosR)
+      };
+    };
+
+    const bottomRing = [];
+    const girdleRing = [];
+    const tableRing = [];
+
+    for (let i = 0; i < n; i++) {
+      const pFull = transform2D(pts2D[i], 1.0);
+      const pTable = transform2D(pts2D[i], tableScale);
+      bottomRing.push(placeFlat(frame, pFull.u, pFull.v, rRoot));
+      girdleRing.push(placeFlat(frame, pFull.u, pFull.v, rGirdle));
+      tableRing.push(placeFlat(frame, pTable.u, pTable.v, rTable));
+    }
+
+    const bottomCenter = placeFlat(frame, centerU, centerV, rRoot);
+    const topCenter = placeFlat(frame, centerU, centerV, rTable);
+    const tris = [];
+
+    for (let i = 0; i < n; i++) {
+      const next = (i + 1) % n;
+      tris.push([bottomCenter, bottomRing[i], bottomRing[next]]);
+      tris.push([bottomRing[i], girdleRing[i], girdleRing[next]]);
+      tris.push([bottomRing[i], girdleRing[next], bottomRing[next]]);
+      tris.push([girdleRing[i], tableRing[i], tableRing[next]]);
+      tris.push([girdleRing[i], tableRing[next], girdleRing[next]]);
+      tris.push([topCenter, tableRing[next], tableRing[i]]);
+    }
+
+    return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'gem' }));
+  };
+
+  // Bezel collar: kept on the cylindrical wrap (wrapPoint) on purpose - a
+  // bezel is a metal wall that follows the band's curve into the band rim,
+  // so it should bend with the ring, unlike the stone/prongs it holds.
+  const buildShapeSpecificBezelShell = (stone) => {
+    const { shape, hw, hh, rot, x: centerU, y: centerV, outlinePts: pts2D, effectiveRelief, stoneRFloor } = stone;
+    const bSize = Math.max(0.15, Number(stone.bezelSize) || 0.5);
+    const rad = (rot * Math.PI) / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const n = pts2D.length;
+
+    const toUV = (pt) => ({
+      u: centerU + (pt.x * cosR - pt.y * sinR),
+      v: centerV + (pt.x * sinR + pt.y * cosR)
+    });
+
+    const clampRootToBandV = (v, blend = 0.72) => {
+      const maxBandV = halfW * 0.96;
+      if (Math.abs(v) <= maxBandV) return v;
+      const clamped = Math.sign(v) * maxBandV;
+      return v * (1 - blend) + clamped * blend;
+    };
+
+    const lipInset = -Math.min(bSize * 0.34, Math.min(hw, hh) * 0.14);
+    const innerSeatPts2D = offsetPolygon2D(pts2D, -0.02, shape);
+    const innerLipPts2D = offsetPolygon2D(pts2D, lipInset, shape);
+    const outerTopPts2D = offsetPolygon2D(pts2D, bSize * 0.88, shape);
+    const outerGirdlePts2D = offsetPolygon2D(pts2D, bSize, shape);
+    const outerSkirtPts2D = offsetPolygon2D(pts2D, bSize * 1.06, shape);
+
+    const setRelief = Math.max(0.32, effectiveRelief);
+    const rRoot = Math.min(stoneRFloor, outerRadius - 0.48);
+    const rBandSeat = outerRadius - 0.14;
+    const rGirdle = outerRadius + setRelief * 0.56;
+    const rTopOuter = outerRadius + setRelief * 0.88;
+    const rTopLip = outerRadius + setRelief * 0.92;
+    const rInnerGirdle = outerRadius + setRelief * 0.52;
+
+    const outRootRing = [];
+    const outSeatRing = [];
+    const outGirdleRing = [];
+    const outTopRing = [];
+    const inLipRing = [];
+    const inGirdleRing = [];
+    const inRootRing = [];
+
+    for (let i = 0; i < n; i++) {
+      const uvSeatIn = toUV(innerSeatPts2D[i]);
+      const uvLipIn = toUV(innerLipPts2D[i]);
+      const uvOutTop = toUV(outerTopPts2D[i]);
+      const uvOutGirdle = toUV(outerGirdlePts2D[i]);
+      const uvOutSkirt = toUV(outerSkirtPts2D[i]);
+
+      const baseRootV = clampRootToBandV(uvOutSkirt.v, 0.78);
+      const inRootV = clampRootToBandV(uvSeatIn.v, 0.78);
+
+      outRootRing.push(wrapPoint(uvOutSkirt.u, baseRootV, rRoot));
+      outSeatRing.push(wrapPoint(uvOutSkirt.u, uvOutSkirt.v, rBandSeat));
+      outGirdleRing.push(wrapPoint(uvOutGirdle.u, uvOutGirdle.v, rGirdle));
+      outTopRing.push(wrapPoint(uvOutTop.u, uvOutTop.v, rTopOuter));
+      inLipRing.push(wrapPoint(uvLipIn.u, uvLipIn.v, rTopLip));
+      inGirdleRing.push(wrapPoint(uvSeatIn.u, uvSeatIn.v, rInnerGirdle));
+      inRootRing.push(wrapPoint(uvSeatIn.u, inRootV, rRoot));
+    }
+
+    const tris = [];
+    const pushQuad = (a1, a2, b2, b1) => {
+      tris.push([a1, b1, b2], [a1, b2, a2]);
+    };
+
+    for (let i = 0; i < n; i++) {
+      const next = (i + 1) % n;
+      pushQuad(outRootRing[i], outRootRing[next], outSeatRing[next], outSeatRing[i]);
+      pushQuad(outSeatRing[i], outSeatRing[next], outGirdleRing[next], outGirdleRing[i]);
+      pushQuad(outGirdleRing[i], outGirdleRing[next], outTopRing[next], outTopRing[i]);
+      pushQuad(outTopRing[i], outTopRing[next], inLipRing[next], inLipRing[i]);
+      pushQuad(inLipRing[i], inLipRing[next], inGirdleRing[next], inGirdleRing[i]);
+      pushQuad(inGirdleRing[i], inGirdleRing[next], inRootRing[next], inRootRing[i]);
+      pushQuad(inRootRing[i], inRootRing[next], outRootRing[next], outRootRing[i]);
+    }
+
+    return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'band' }));
+  };
+
+  // V-Prong chevron: uses ONE flat frame centered on the STONE's own center
+  // (not each chevron's own corner) so all of a stone's V-shaped claws stay
+  // rigidly co-planar with each other and with the gem they hold, instead of
+  // each tip bending away from center at its own angle.
+  const build3DVProngChevron = (chevron, stone, rRoot, rGirdle, rTop) => {
+    const { x: centerU, y: centerV, rot, hw, hh } = stone;
+    const rad = (rot * Math.PI) / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const frame = makeFlatFrame(centerU, centerV);
+
+    const toUV = (pt) => ({
+      u: centerU + (pt.x * cosR - pt.y * sinR),
+      v: centerV + (pt.x * sinR + pt.y * cosR)
+    });
+
+    const thickness = Math.max(0.24, Math.min(hw, hh) * 0.14);
+
+    let uxA = chevron.a.x - chevron.v.x;
+    let uyA = chevron.a.y - chevron.v.y;
+    const lenA = Math.hypot(uxA, uyA) || 1;
+    uxA /= lenA; uyA /= lenA;
+
+    let uxB = chevron.b.x - chevron.v.x;
+    let uyB = chevron.b.y - chevron.v.y;
+    const lenB = Math.hypot(uxB, uyB) || 1;
+    uxB /= lenB; uyB /= lenB;
+
+    let outVx = chevron.v.x;
+    let outVy = chevron.v.y;
+    const outVLen = Math.hypot(outVx, outVy) || 1;
+    outVx /= outVLen; outVy /= outVLen;
+
+    let nAx = -uyA, nAy = uxA;
+    if (nAx * outVx + nAy * outVy < 0) { nAx = -nAx; nAy = -nAy; }
+
+    let nBx = -uyB, nBy = uxB;
+    if (nBx * outVx + nBy * outVy < 0) { nBx = -nBx; nBy = -nBy; }
+
+    let bisX = nAx + nBx;
+    let bisY = nAy + nBy;
+    const bisLen = Math.hypot(bisX, bisY);
+    if (bisLen < 1e-4) {
+      bisX = outVx; bisY = outVy;
+    } else {
+      bisX /= bisLen; bisY /= bisLen;
+    }
+    const miterFactor = Math.min(1.55, 1 / Math.max(0.45, bisX * nAx + bisY * nAy));
+
+    const buildProfile2D = (inwardShift = 0, outScale = 1.0) => {
+      const vIn = {
+        x: chevron.v.x - bisX * inwardShift,
+        y: chevron.v.y - bisY * inwardShift
+      };
+      const aIn = {
+        x: chevron.a.x - nAx * (inwardShift * 0.85),
+        y: chevron.a.y - nAy * (inwardShift * 0.85)
+      };
+      const bIn = {
+        x: chevron.b.x - nBx * (inwardShift * 0.85),
+        y: chevron.b.y - nBy * (inwardShift * 0.85)
+      };
+
+      const effT = thickness * outScale;
+      const aOut = {
+        x: chevron.a.x + nAx * effT + uxA * (effT * 0.25),
+        y: chevron.a.y + nAy * effT + uyA * (effT * 0.25)
+      };
+      const vOut = {
+        x: chevron.v.x + bisX * (effT * miterFactor),
+        y: chevron.v.y + bisY * (effT * miterFactor)
+      };
+      const bOut = {
+        x: chevron.b.x + nBx * effT + uxB * (effT * 0.25),
+        y: chevron.b.y + nBy * effT + uyB * (effT * 0.25)
+      };
+
+      const pts = [aIn, vIn, bIn, bOut, vOut, aOut];
+      let signedArea = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+        signedArea += (p1.x * p2.y - p2.x * p1.y);
+      }
+      if (signedArea < 0) pts.reverse();
+      return pts;
+    };
+
+    const rootPts2D = buildProfile2D(0.02, 1.08);
+    const girdlePts2D = buildProfile2D(0.03, 1.0);
+    const topPts2D = buildProfile2D(thickness * 0.55, 0.82);
+
+    const n = 6;
+    const rootRing = [];
+    const girdleRing = [];
+    const topRing = [];
+
+    for (let i = 0; i < n; i++) {
+      const uvR = toUV(rootPts2D[i]);
+      const uvG = toUV(girdlePts2D[i]);
+      const uvT = toUV(topPts2D[i]);
+
+      const clampedRootV = Math.abs(uvR.v) > halfW * 0.95
+        ? uvR.v * 0.25 + Math.sign(uvR.v) * halfW * 0.95 * 0.75
+        : uvR.v;
+
+      rootRing.push(placeFlat(frame, uvR.u, clampedRootV, rRoot));
+      girdleRing.push(placeFlat(frame, uvG.u, uvG.v, rGirdle));
+      topRing.push(placeFlat(frame, uvT.u, uvT.v, rTop));
+    }
+
+    const tris = [];
+    const pushQuad = (a1, a2, b2, b1) => {
+      tris.push([a1, b1, b2], [a1, b2, a2]);
+    };
+
+    for (let i = 0; i < n; i++) {
+      const next = (i + 1) % n;
+      pushQuad(rootRing[i], rootRing[next], girdleRing[next], girdleRing[i]);
+      pushQuad(girdleRing[i], girdleRing[next], topRing[next], topRing[i]);
+    }
+
+    tris.push(
+      [topRing[0], topRing[1], topRing[4]],
+      [topRing[0], topRing[4], topRing[5]],
+      [topRing[1], topRing[2], topRing[3]],
+      [topRing[1], topRing[3], topRing[4]]
+    );
+    tris.push(
+      [rootRing[0], rootRing[4], rootRing[1]],
+      [rootRing[0], rootRing[5], rootRing[4]],
+      [rootRing[1], rootRing[3], rootRing[2]],
+      [rootRing[1], rootRing[4], rootRing[3]]
+    );
+
+    return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'band' }));
+  };
+
+  // Halo base collar: kept on the cylindrical wrap, same reasoning as the
+  // bezel - it's a metal ring that follows the band's curve.
+  const buildHollowCollarShell = (pts2D, centerU, centerV, rotDeg, innerPts2D, outerPts2D, rRoot, rTop) => {
+    const rad = (rotDeg * Math.PI) / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const n = pts2D.length;
+
+    const transformPt2D = (pt) => ({
+      u: centerU + (pt.x * cosR - pt.y * sinR),
+      v: centerV + (pt.x * sinR + pt.y * cosR)
+    });
+
+    const inBot = [], inTop = [], outBot = [], outTop = [];
+    for (let i = 0; i < n; i++) {
+      const pIn = transformPt2D(innerPts2D[i]);
+      const pOut = transformPt2D(outerPts2D[i]);
+      inBot.push(wrapPoint(pIn.u, pIn.v, rRoot));
+      inTop.push(wrapPoint(pIn.u, pIn.v, rTop));
+      outBot.push(wrapPoint(pOut.u, pOut.v, rRoot));
+      outTop.push(wrapPoint(pOut.u, pOut.v, rTop));
+    }
+
+    const tris = [];
+    for (let i = 0; i < n; i++) {
+      const next = (i + 1) % n;
+      tris.push([outBot[i], outTop[i], outTop[next]], [outBot[i], outTop[next], outBot[next]]);
+      tris.push([inBot[next], inTop[next], inTop[i]], [inBot[next], inTop[i], inBot[i]]);
+      tris.push([inTop[i], inTop[next], outTop[next]], [inTop[i], outTop[next], outTop[i]]);
+      tris.push([outBot[i], outBot[next], inBot[next]], [outBot[i], inBot[next], inBot[i]]);
+    }
+    return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'band' }));
+  };
+
+  if (cutoutMode !== 'sockets_only') {
+    preparedStones.forEach((stone, idx) => {
+      const { hw, hh, rot, shape, outlinePts: pts, effectiveRelief, isFlushStone, stonePocketDepth, stoneRFloor } = stone;
+
+      const rRoot = carveBandPockets
+        ? (stoneRFloor + 0.015)
+        : (outerRadius - 0.45);
+
+      const rTable = isFlushStone
+        ? (outerRadius + 0.03)
+        : (outerRadius + effectiveRelief);
+      const rGirdle = isFlushStone
+        ? (outerRadius - stonePocketDepth * 0.35)
+        : (outerRadius + effectiveRelief * 0.55);
+
+      const gemTris = buildFacetedCrownShell(pts, stone.x, stone.y, rot, rRoot, rGirdle, rTable, isFlushStone ? 0.78 : 0.64);
+      shells.push({
+        name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_${shape.replace(/\s+/g, '')}`,
+        role: `Stone ${idx + 1} (${stone.colorMode === 'preset' ? stone.preset : 'Custom'})`,
+        color: stone.color || '#fbfbfb',
+        isMetal: false,
+        triangles: gemTris
+      });
+
+      if (include3DSettings && stone.settingStyle && !['None', 'Flush'].includes(stone.settingStyle)) {
+        const style = stone.settingStyle;
+        const setRelief = Math.max(0.4, effectiveRelief);
+        if (style === 'Bezel') {
+          const bezelColorHex = METAL_COLORS[stone.bezelColor || bandColor]?.hex || '#d4af37';
+          const bezelTris = buildShapeSpecificBezelShell(stone);
+          shells.push({
+            name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Bezel`,
+            role: `Stone ${idx + 1} Bezel`,
+            color: bezelColorHex,
+            isMetal: true,
+            triangles: bezelTris
+          });
+        } else if (style === 'V-Prong') {
+          const vProngSpec = getVProngData(shape, hw, hh);
+          const allVProngTris = [];
+          const prongRoot = Math.min(stoneRFloor, outerRadius - 0.42);
+          const prongGirdle = outerRadius + setRelief * 0.68;
+          const prongTop = outerRadius + setRelief * 1.06;
+
+          vProngSpec.chevrons.forEach((chev) => {
+            const cTris = build3DVProngChevron(chev, stone, prongRoot, prongGirdle, prongTop);
+            allVProngTris.push(...cTris);
+          });
+
+          if (vProngSpec.roundProngs.length > 0) {
+            const pRadius = Math.max(0.28, hw * 0.15);
+            const prongOutline = getShapeOutlinePoints('Round Brilliant', pRadius, pRadius, 16);
+            const rad = (rot * Math.PI) / 180;
+            const cosR = Math.cos(rad), sinR = Math.sin(rad);
+            vProngSpec.roundProngs.forEach((p) => {
+              const pu = stone.x + (p.x * cosR - p.y * sinR);
+              const pv = stone.y + (p.x * sinR + p.y * cosR);
+              const pTris = buildFacetedCrownShell(
+                prongOutline, pu, pv, 0,
+                prongRoot, outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.08, 0.7
+              );
+              allVProngTris.push(...pTris);
+            });
+          }
+
+          if (allVProngTris.length > 0) {
+            shells.push({
+              name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_VProngs`,
+              role: `Stone ${idx + 1} V-Prongs`,
+              color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+              isMetal: true,
+              triangles: allVProngTris
+            });
+          }
+        } else if (style === '4-Prong' || style === '6-Prong') {
+          const prongs = getProngPositions(style, shape, hw, hh);
+          const pRadius = Math.max(0.28, hw * 0.16);
+          const prongOutline = getShapeOutlinePoints('Round Brilliant', pRadius, pRadius, 16);
+          const rad = (rot * Math.PI) / 180;
+          const cosR = Math.cos(rad), sinR = Math.sin(rad);
+          const allProngTris = [];
+
+          prongs.forEach((p) => {
+            const pu = stone.x + (p.x * cosR - p.y * sinR);
+            const pv = stone.y + (p.x * sinR + p.y * cosR);
+            const pTris = buildFacetedCrownShell(
+              prongOutline, pu, pv, 0,
+              Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.12, 0.7
+            );
+            allProngTris.push(...pTris);
+          });
+
+          if (allProngTris.length > 0) {
+            shells.push({
+              name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Prongs`,
+              role: `Stone ${idx + 1} Prongs`,
+              color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+              isMetal: true,
+              triangles: allProngTris
+            });
+          }
+        } else if (style === 'Halo') {
+          const hSize = Number(stone.haloSize) || 1.0;
+          const hData = getHaloData(shape, hw, hh, hSize);
+          const hRadius = hSize / 2;
+          const haloGemOutline = getShapeOutlinePoints('Round Brilliant', hRadius, hRadius, 18);
+          const rad = (rot * Math.PI) / 180;
+          const cosR = Math.cos(rad), sinR = Math.sin(rad);
+
+          const seatInnerPts = offsetPolygon2D(pts, 0.05, shape);
+          const seatOuterPts = offsetPolygon2D(pts, hSize + 0.25, shape);
+          const seatTris = buildHollowCollarShell(
+            pts, stone.x, stone.y, rot,
+            seatInnerPts, seatOuterPts,
+            Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.42
+          );
+          shells.push({
+            name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Halo_Base`,
+            role: `Stone ${idx + 1} Halo Base`,
+            color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+            isMetal: true,
+            triangles: seatTris
+          });
+
+          const haloTris = [];
+          hData.stones.forEach((hp) => {
+            const hu = stone.x + (hp.x * cosR - hp.y * sinR);
+            const hv = stone.y + (hp.x * sinR + hp.y * cosR);
+            const hTris = buildFacetedCrownShell(
+              haloGemOutline, hu, hv, 0,
+              outerRadius + setRelief * 0.2, outerRadius + setRelief * 0.65, outerRadius + setRelief * 0.88, 0.65
+            );
+            haloTris.push(...hTris);
+          });
+
+          shells.push({
+            name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Halo_Gems`,
+            role: `Stone ${idx + 1} Halo Gems (${hData.numStones})`,
+            color: stone.haloColor || '#fbfbfb',
+            isMetal: false,
+            triangles: haloTris
+          });
+        }
+      }
+    });
+  }
+
+  return { shells, innerDiameter, outerDiameter: outerRadius * 2, bandWidth: bw };
+};
+
+const generateBinarySTLBlob = (shells, bandWidth = 4) => {
+  let totalTriangles = 0;
+  shells.forEach(s => { totalTriangles += s.triangles.length; });
+
+  const bufferLength = 84 + totalTriangles * 50;
+  const arrayBuffer = new ArrayBuffer(bufferLength);
+  const view = new DataView(arrayBuffer);
+
+  const headerText = `MikeyTime Ring Studio Welded Multi-Shell STL (${shells.length} Shells)`;
+  for (let i = 0; i < 80; i++) {
+    view.setUint8(i, i < headerText.length ? headerText.charCodeAt(i) : 32);
+  }
+
+  view.setUint32(80, totalTriangles, true);
+
+  const zOffset = (Number(bandWidth) || 4) / 2;
+  const toSTLCoord = (pt) => ({ x: pt.x, y: -pt.z, z: pt.y + zOffset });
+  const toSTLNormal = (n) => ({ x: n.x, y: -n.z, z: n.y });
+
+  let offset = 84;
+  shells.forEach(shell => {
+    shell.triangles.forEach(tri => {
+      const n = toSTLNormal(tri.normal);
+      const v1 = toSTLCoord(tri.v1);
+      const v2 = toSTLCoord(tri.v2);
+      const v3 = toSTLCoord(tri.v3);
+
+      view.setFloat32(offset, n.x, true);
+      view.setFloat32(offset + 4, n.y, true);
+      view.setFloat32(offset + 8, n.z, true);
+
+      view.setFloat32(offset + 12, v1.x, true);
+      view.setFloat32(offset + 16, v1.y, true);
+      view.setFloat32(offset + 20, v1.z, true);
+
+      view.setFloat32(offset + 24, v2.x, true);
+      view.setFloat32(offset + 28, v2.y, true);
+      view.setFloat32(offset + 32, v2.z, true);
+
+      view.setFloat32(offset + 36, v3.x, true);
+      view.setFloat32(offset + 40, v3.y, true);
+      view.setFloat32(offset + 44, v3.z, true);
+
+      view.setUint16(offset + 48, 0, true);
+      offset += 50;
+    });
+  });
+
+  return new Blob([arrayBuffer], { type: 'application/octet-stream' });
+};
+
+const generate3MFBlob = (shells, bandWidth = 4) => {
+  const zOffset = (Number(bandWidth) || 4) / 2;
+  const to3MFCoord = (pt) => ({ x: pt.x, y: -pt.z, z: pt.y + zOffset });
+
+  let objectsXml = '';
+  let buildItemsXml = '';
+
+  shells.forEach((shell, idx) => {
+    const objId = idx + 1;
+    const vertMap = new Map();
+    const verts = [];
+    const tris = [];
+
+    const getVertIdx = (p) => {
+      const tp = to3MFCoord(p);
+      const key = `${tp.x.toFixed(5)},${tp.y.toFixed(5)},${tp.z.toFixed(5)}`;
+      let vIdx = vertMap.get(key);
+      if (vIdx === undefined) {
+        vIdx = verts.length;
+        vertMap.set(key, vIdx);
+        verts.push(`<vertex x="${tp.x.toFixed(5)}" y="${tp.y.toFixed(5)}" z="${tp.z.toFixed(5)}" />`);
+      }
+      return vIdx;
+    };
+
+    shell.triangles.forEach((tri) => {
+      const i1 = getVertIdx(tri.v1);
+      const i2 = getVertIdx(tri.v2);
+      const i3 = getVertIdx(tri.v3);
+      if (i1 !== i2 && i2 !== i3 && i3 !== i1) {
+        tris.push(`<triangle v1="${i1}" v2="${i2}" v3="${i3}" />`);
+      }
+    });
+
+    objectsXml += `
+    <object id="${objId}" name="${shell.name}" type="model">
+      <mesh>
+        <vertices>${verts.join('')}</vertices>
+        <triangles>${tris.join('')}</triangles>
+      </mesh>
+    </object>`;
+    buildItemsXml += `<item objectid="${objId}" />`;
+  });
+
+  const modelXml = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>${objectsXml}
+  </resources>
+  <build>${buildItemsXml}</build>
+</model>`;
+
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
+</Types>`;
+
+  const relsXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" />
+</Relationships>`;
+
+  const encoder = new TextEncoder();
+  const files = [
+    { name: '[Content_Types].xml', data: encoder.encode(contentTypesXml) },
+    { name: '_rels/.rels', data: encoder.encode(relsXml) },
+    { name: '3D/3dmodel.model', data: encoder.encode(modelXml) }
+  ];
+
+  const crcTable = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    crcTable[n] = c;
+  }
+  const crc32 = (bytes) => {
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[i]) & 0xff];
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+
+  let localSize = 0;
+  let centralSize = 0;
+  files.forEach(f => {
+    f.nameBytes = encoder.encode(f.name);
+    f.crc = crc32(f.data);
+    localSize += 30 + f.nameBytes.length + f.data.length;
+    centralSize += 46 + f.nameBytes.length;
+  });
+
+  const totalZipSize = localSize + centralSize + 22;
+  const zipBuf = new ArrayBuffer(totalZipSize);
+  const view = new DataView(zipBuf);
+  const uint8 = new Uint8Array(zipBuf);
+
+  let offset = 0;
+  files.forEach(f => {
+    f.localOffset = offset;
+    view.setUint32(offset, 0x04034b50, true);
+    view.setUint16(offset + 4, 20, true);
+    view.setUint16(offset + 6, 0, true);
+    view.setUint16(offset + 8, 0, true);
+    view.setUint16(offset + 10, 0, true);
+    view.setUint16(offset + 12, 0, true);
+    view.setUint32(offset + 14, f.crc, true);
+    view.setUint32(offset + 18, f.data.length, true);
+    view.setUint32(offset + 22, f.data.length, true);
+    view.setUint16(offset + 26, f.nameBytes.length, true);
+    view.setUint16(offset + 28, 0, true);
+    uint8.set(f.nameBytes, offset + 30);
+    uint8.set(f.data, offset + 30 + f.nameBytes.length);
+    offset += 30 + f.nameBytes.length + f.data.length;
+  });
+
+  const centralDirOffset = offset;
+  files.forEach(f => {
+    view.setUint32(offset, 0x02014b50, true);
+    view.setUint16(offset + 4, 20, true);
+    view.setUint16(offset + 6, 20, true);
+    view.setUint16(offset + 8, 0, true);
+    view.setUint16(offset + 10, 0, true);
+    view.setUint16(offset + 12, 0, true);
+    view.setUint16(offset + 14, 0, true);
+    view.setUint32(offset + 16, f.crc, true);
+    view.setUint32(offset + 20, f.data.length, true);
+    view.setUint32(offset + 24, f.data.length, true);
+    view.setUint16(offset + 28, f.nameBytes.length, true);
+    view.setUint16(offset + 30, 0, true);
+    view.setUint16(offset + 32, 0, true);
+    view.setUint16(offset + 34, 0, true);
+    view.setUint16(offset + 36, 0, true);
+    view.setUint32(offset + 38, 0, true);
+    view.setUint32(offset + 42, f.localOffset, true);
+    uint8.set(f.nameBytes, offset + 46);
+    offset += 46 + f.nameBytes.length;
+  });
+
+  view.setUint32(offset, 0x06054b50, true);
+  view.setUint16(offset + 4, 0, true);
+  view.setUint16(offset + 6, 0, true);
+  view.setUint16(offset + 8, files.length, true);
+  view.setUint16(offset + 10, files.length, true);
+  view.setUint32(offset + 12, centralSize, true);
+  view.setUint32(offset + 16, centralDirOffset, true);
+  view.setUint16(offset + 20, 0, true);
+
+  return new Blob([zipBuf], { type: 'model/3mf' });
+};
+
+const Ring3DPreviewCanvas = ({
+  shells,
+  innerDiameter,
+  outerDiameter,
+  onExportSTL,
+  onExport3MF,
+  externalCameraRequest,
+  explodeParts,
+  setExplodeParts
+}) => {
+  const canvasRef = useRef(null);
+  const [rotX, setRotX] = useState(35);
+  const [rotY, setRotY] = useState(-22);
+  const [camZoom, setCamZoom] = useState(1.18);
+  const [isDragging, setIsDragging] = useState(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (!externalCameraRequest) return;
+    setRotX(externalCameraRequest.rotX);
+    setRotY(externalCameraRequest.rotY);
+    setCamZoom(externalCameraRequest.camZoom);
+  }, [externalCameraRequest]);
+
+  const parseHexRGB = (hex) => {
+    const clean = (hex || '#ffffff').replace('#', '');
+    const num = parseInt(clean, 16);
+    return {
+      r: ((num >> 16) & 255) || 220,
+      g: ((num >> 8) & 255) || 220,
+      b: (num & 255) || 220
+    };
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    const imgData = ctx.createImageData(width, height);
+    const data = imgData.data;
+    const zBuffer = new Float32Array(width * height);
+    zBuffer.fill(-1e9);
+
+    const cx = width * 0.5, cy = height * 0.5;
+    const maxR = width * 0.65;
+    for (let py = 0; py < height; py++) {
+      const dy = py - cy;
+      const rowOffset = py * width;
+      for (let px = 0; px < width; px++) {
+        const dx = px - cx;
+        const t = Math.min(1, Math.sqrt(dx * dx + dy * dy) / maxR);
+        const idx = (rowOffset + px) * 4;
+        data[idx] = Math.round(30 * (1 - t) + 15 * t);
+        data[idx + 1] = Math.round(41 * (1 - t) + 23 * t);
+        data[idx + 2] = Math.round(59 * (1 - t) + 42 * t);
+        data[idx + 3] = 255;
+      }
+    }
+
+    const rx = (rotX * Math.PI) / 180;
+    const ry = (rotY * Math.PI) / 180;
+    const cosX = Math.cos(rx), sinX = Math.sin(rx);
+    const cosY = Math.cos(ry), sinY = Math.sin(ry);
+
+    const mmScale = 12.2 * camZoom;
+    const fov = 165;
+
+    const project3D = (pt, radialExplode = 0) => {
+      let x = pt.x;
+      let y = pt.y;
+      let z = pt.z;
+
+      if (radialExplode > 0) {
+        const rLen = Math.sqrt(x * x + z * z) || 1;
+        x += (x / rLen) * radialExplode;
+        z += (z / rLen) * radialExplode;
+      }
+
+      const x1 = x * cosY + z * sinY;
+      const z1 = -x * sinY + z * cosY;
+      const y2 = y * cosX - z1 * sinX;
+      const z2 = y * sinX + z1 * cosX;
+
+      const persp = fov / Math.max(30, fov - z2 * 0.75);
+      return {
+        sx: cx + x1 * mmScale * persp,
+        sy: cy - y2 * mmScale * persp,
+        z: z2
+      };
+    };
+
+    const lightDir1 = { x: 0.34, y: 0.56, z: 0.75 };
+    const lightDir2 = { x: -0.45, y: -0.25, z: 0.85 };
+    const creaseLines = [];
+
+    shells.forEach((shell, sIdx) => {
+      const baseRGB = parseHexRGB(shell.color);
+      const radialOffset = sIdx === 0 ? 0 : explodeParts * (shell.isMetal ? 1.8 : 3.2);
+
+      shell.triangles.forEach(tri => {
+        let nx1 = tri.normal.x * cosY + tri.normal.z * sinY;
+        const nz1 = -tri.normal.x * sinY + tri.normal.z * cosY;
+        let ny2 = tri.normal.y * cosX - nz1 * sinX;
+        let nz2 = tri.normal.y * sinX + nz1 * cosX;
+
+        if (nz2 < 0) {
+          nx1 = -nx1;
+          ny2 = -ny2;
+          nz2 = -nz2;
+        }
+
+        const p1 = project3D(tri.v1, radialOffset);
+        const p2 = project3D(tri.v2, radialOffset);
+        const p3 = project3D(tri.v3, radialOffset);
+
+        const minX = Math.max(0, Math.floor(Math.min(p1.sx, p2.sx, p3.sx)));
+        const maxX = Math.min(width - 1, Math.ceil(Math.max(p1.sx, p2.sx, p3.sx)));
+        const minY = Math.max(0, Math.floor(Math.min(p1.sy, p2.sy, p3.sy)));
+        const maxY = Math.min(height - 1, Math.ceil(Math.max(p1.sy, p2.sy, p3.sy)));
+        if (minX > maxX || minY > maxY) return;
+
+        const denom = (p2.sy - p3.sy) * (p1.sx - p3.sx) + (p3.sx - p2.sx) * (p1.sy - p3.sy);
+        if (Math.abs(denom) < 1e-4) return;
+        const invDenom = 1.0 / denom;
+
+        const dot1 = Math.max(0, nx1 * lightDir1.x + ny2 * lightDir1.y + nz2 * lightDir1.z);
+        const dot2 = Math.max(0, nx1 * lightDir2.x + ny2 * lightDir2.y + nz2 * lightDir2.z) * 0.28;
+        const isPocketWall = tri.shadeTag === 'pocket_wall';
+        const isPocketFloor = tri.shadeTag === 'pocket_floor';
+        const cavityAO = isPocketFloor ? 0.48 : (isPocketWall ? 0.64 : 1.0);
+
+        const specPower = shell.isMetal ? 18 : 34;
+        const specStrength = isPocketFloor ? 0.1 : (shell.isMetal ? 0.46 : 0.92);
+        const spec = Math.pow(Math.max(0, nz2), specPower) * specStrength;
+        const lum = (0.34 + dot1 * 0.58 + dot2) * cavityAO;
+
+        const rCol = Math.min(255, Math.round(baseRGB.r * lum + 255 * spec));
+        const gCol = Math.min(255, Math.round(baseRGB.g * lum + 255 * spec));
+        const bCol = Math.min(255, Math.round(baseRGB.b * lum + 255 * spec));
+
+        const zBias = sIdx === 0 ? 0 : (shell.isMetal ? 0.08 : 0.05);
+
+        for (let py = minY; py <= maxY; py++) {
+          const rowIdx = py * width;
+          const pyCenter = py + 0.5;
+          for (let px = minX; px <= maxX; px++) {
+            const pxCenter = px + 0.5;
+            const w1 = ((p2.sy - p3.sy) * (pxCenter - p3.sx) + (p3.sx - p2.sx) * (pyCenter - p3.sy)) * invDenom;
+            if (w1 < -0.0005) continue;
+            const w2 = ((p3.sy - p1.sy) * (pxCenter - p3.sx) + (p1.sx - p3.sx) * (pyCenter - p3.sy)) * invDenom;
+            if (w2 < -0.0005) continue;
+            const w3 = 1.0 - w1 - w2;
+            if (w3 < -0.0005) continue;
+
+            const zVal = w1 * p1.z + w2 * p2.z + w3 * p3.z + zBias;
+            const bIdx = rowIdx + px;
+            if (zVal > zBuffer[bIdx]) {
+              zBuffer[bIdx] = zVal;
+              const pIdx = bIdx * 4;
+              data[pIdx] = rCol;
+              data[pIdx + 1] = gCol;
+              data[pIdx + 2] = bCol;
+              data[pIdx + 3] = 255;
+            }
+          }
+        }
+
+        if (!shell.isMetal || isPocketWall) {
+          creaseLines.push({
+            p1, p2, p3,
+            zBias: zBias + 0.08,
+            color: isPocketWall ? [18, 24, 38] : [255, 255, 255],
+            alpha: isPocketWall ? 0.45 : 0.32
+          });
+        }
+      });
+    });
+
+    const drawDepthLine = (a, b, zBias, rgb, alpha) => {
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.sx - a.sx, b.sy - a.sy)));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const px = Math.round(a.sx + (b.sx - a.sx) * t);
+        const py = Math.round(a.sy + (b.sy - a.sy) * t);
+        if (px < 0 || px >= width || py < 0 || py >= height) continue;
+        const z = a.z + (b.z - a.z) * t + zBias;
+        const bIdx = py * width + px;
+        if (z >= zBuffer[bIdx] - 0.12) {
+          const pIdx = bIdx * 4;
+          data[pIdx] = Math.round(data[pIdx] * (1 - alpha) + rgb[0] * alpha);
+          data[pIdx + 1] = Math.round(data[pIdx + 1] * (1 - alpha) + rgb[1] * alpha);
+          data[pIdx + 2] = Math.round(data[pIdx + 2] * (1 - alpha) + rgb[2] * alpha);
+        }
+      }
+    };
+
+    creaseLines.forEach(cl => {
+      drawDepthLine(cl.p1, cl.p2, cl.zBias, cl.color, cl.alpha);
+      drawDepthLine(cl.p2, cl.p3, cl.zBias, cl.color, cl.alpha);
+    });
+
+    ctx.putImageData(imgData, 0, 0);
+  }, [shells, rotX, rotY, camZoom, explodeParts]);
+
+  const handlePointerDown = (e) => {
+    setIsDragging(true);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    lastPosRef.current = { x: clientX, y: clientY };
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const dx = clientX - lastPosRef.current.x;
+    const dy = clientY - lastPosRef.current.y;
+    lastPosRef.current = { x: clientX, y: clientY };
+    setRotY(prev => prev + dx * 0.65);
+    setRotX(prev => Math.max(-89, Math.min(89, prev + dy * 0.65)));
+  };
+
+  const handlePointerUp = () => setIsDragging(false);
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.1 : -0.1;
+    setCamZoom(prev => Math.max(0.5, Math.min(3.2, Number((prev + delta).toFixed(2)))));
+  };
+
+  return (
+    <div className="relative w-full max-w-5xl flex flex-col items-center">
+      <canvas
+        ref={canvasRef}
+        width={920}
+        height={360}
+        onMouseDown={handlePointerDown}
+        onMouseMove={handlePointerMove}
+        onMouseUp={handlePointerUp}
+        onMouseLeave={handlePointerUp}
+        onTouchStart={handlePointerDown}
+        onTouchMove={handlePointerMove}
+        onTouchEnd={handlePointerUp}
+        onWheel={handleWheel}
+        className="w-full h-auto rounded-lg border border-slate-700 shadow-2xl cursor-grab active:cursor-grabbing"
+        style={{ maxHeight: '35vh' }}
+      />
+
+      <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 bg-slate-900/85 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700 text-white text-xs">
+        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+        <span className="font-bold text-emerald-300">1 Welded Band + {Math.max(0, shells.length - 1)} Gem/Setting Shells</span>
+        <span className="text-slate-400">|</span>
+        <span>Inner Bore Ø: {innerDiameter.toFixed(2)}mm</span>
+        <span className="text-slate-400">|</span>
+        <span>Outer Ø: {outerDiameter.toFixed(2)}mm</span>
+      </div>
+
+      <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/85 backdrop-blur p-1.5 rounded-lg border border-slate-700 pointer-events-auto">
+          <button
+            onClick={() => { setRotX(0); setRotY(0); setCamZoom(1.35); }}
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+              rotX === 0 && rotY === 0 ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
+          >
+            Crown View (1:1 Top)
+          </button>
+          <button
+            onClick={() => { setRotX(35); setRotY(-22); setCamZoom(1.2); }}
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+              rotX === 35 && rotY === -22 ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
+          >
+            3/4 View
+          </button>
+          <button
+            onClick={() => { setRotX(82); setRotY(0); setCamZoom(1.15); }}
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+              rotX === 82 && rotY === 0 ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
+          >
+            Profile View (Finger Hole)
+          </button>
+          <button
+            onClick={() => setExplodeParts(prev => (prev === 0 ? 1 : 0))}
+            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
+              explodeParts > 0 ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 hover:bg-slate-700 text-emerald-300'
+            }`}
+          >
+            {explodeParts > 0 ? 'Un-Explode Shells' : 'Inspect Slicer Parts (Explode)'}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={onExportSTL}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg transition-all"
+          >
+            <Printer className="w-3.5 h-3.5" /> Download STL
+          </button>
+          <button
+            onClick={onExport3MF}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs shadow-lg transition-all"
+          >
+            <PackageCheck className="w-3.5 h-3.5" /> Download 3MF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function App() {
+  const [canvasViewMode, setCanvasViewMode] = useState('2d');
+  const [zoom, setZoom] = useState(1);
+  const [bandColor, setBandColor] = useState('gold');
+  const [bandWidth, setBandWidth] = useState(4);
+  const [isFlatBand, setIsFlatBand] = useState(false);
+  const [layoutMode, setLayoutMode] = useState('cluster');
+
+  const [showSeparation, setShowSeparation] = useState(false);
+  const [showWidth, setShowWidth] = useState(false);
+  const [showVertical, setShowVertical] = useState(false);
+  const [verticalFrom, setVerticalFrom] = useState('top');
+
+  const [measTextSize, setMeasTextSize] = useState(0.45);
+  const [showRuler, setShowRuler] = useState(true);
+  const [rulerScale, setRulerScale] = useState(1);
+  const [rulerOffset, setRulerOffset] = useState(0);
+
+  const [ringSize, setRingSize] = useState(7);
+  const [bandThickness, setBandThickness] = useState(1.8);
+  const [gemRelief, setGemRelief] = useState(1.2);
+  const [pocketDepthInput, setPocketDepthInput] = useState(0.75);
+  const [uniqueStone3D, setUniqueStone3D] = useState(false);
+  const [include3DSettings, setInclude3DSettings] = useState(true);
+  const [cutoutMode, setCutoutMode] = useState('pocket_and_gem');
+
+  const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(true);
+  const [is3DSettingsOpen, setIs3DSettingsOpen] = useState(true);
+  const [explode3DParts, setExplode3DParts] = useState(0);
+  const [externalCameraRequest, setExternalCameraRequest] = useState({
+    rotX: 35,
+    rotY: -22,
+    camZoom: 1.18,
+    presetName: '3/4',
+    timestamp: 0
+  });
+
+  const apply3DCameraPreset = (presetName, rotX, rotY, camZoom) => {
+    setCanvasViewMode('3d');
+    setExternalCameraRequest({
+      rotX,
+      rotY,
+      camZoom,
+      presetName,
+      timestamp: Date.now()
+    });
+  };
+
+  const [errorMessage, setErrorMessage] = useState('');
+  const fileInputRef = useRef(null);
+  const svgRef = useRef(null);
+
+  const [stones, setStones] = useState([
+    {
+      id: 1, linkedTo: null, colorMode: 'preset', preset: 'Diamond', color: PRESET_STONES['Diamond'],
+      shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
+      width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
+      haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
+      reliefOverride: '', pocketDepthOverride: ''
+    },
+  ]);
+
+  const addStone = () => {
+    setStones(prevStones => {
+      const lastStone = prevStones[prevStones.length - 1];
+      const newId = prevStones.length > 0 ? Math.max(...prevStones.map(s => s.id)) + 1 : 1;
+
+      if (!lastStone) {
+        return [{
+          id: newId, linkedTo: null, colorMode: 'preset', preset: 'Diamond', color: PRESET_STONES['Diamond'],
+          shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
+          width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
+          haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
+          reliefOverride: '', pocketDepthOverride: ''
+        }];
+      }
+
+      return [
+        ...prevStones,
+        {
+          id: newId,
+          linkedTo: null,
+          colorMode: lastStone.colorMode,
+          preset: lastStone.preset,
+          color: lastStone.color,
+          shape: lastStone.shape || 'Round Brilliant',
+          settingStyle: lastStone.settingStyle || '4-Prong',
+          bezelSize: lastStone.bezelSize || 0.5,
+          bezelColor: lastStone.bezelColor || 'gold',
+          width: lastStone.width,
+          heightOffset: lastStone.heightOffset || 0,
+          rotation: lastStone.rotation || 0,
+          gap: prevStones.length === 1 ? 1 : lastStone.gap,
+          side: prevStones.length === 1 ? 'right' : lastStone.side,
+          centerOffset: prevStones.length === 1 ? ((lastStone.width / 2) + 2) : lastStone.centerOffset,
+          haloSize: lastStone.haloSize || 1.0,
+          haloPreset: lastStone.haloPreset || 'Diamond',
+          haloColor: lastStone.haloColor || PRESET_STONES['Diamond'],
+          haloUniqueStones: lastStone.haloUniqueStones || false,
+          haloOverrides: lastStone.haloOverrides || {},
+          reliefOverride: lastStone.reliefOverride ?? '',
+          pocketDepthOverride: lastStone.pocketDepthOverride ?? ''
+        }
+      ];
+    });
+  };
+
+  const removeSpecificStone = (idToRemove) => {
+    if (stones.length <= 1) return;
+    setStones(prev => prev.filter(s => s.id !== idToRemove).map(s => s.linkedTo === idToRemove ? { ...s, linkedTo: null } : s));
+  };
+
+  const updateStone = (index, updates) => {
+    setStones(prevStones => {
+      const newStones = [...prevStones];
+      newStones[index] = { ...newStones[index], ...updates };
+      return newStones;
+    });
+  };
+
+  const triggerDownload = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportConfig = () => {
+    const config = {
+      zoom, bandColor, bandWidth, isFlatBand, layoutMode,
+      showSeparation, showWidth, showVertical, verticalFrom,
+      measTextSize, showRuler, rulerScale, rulerOffset,
+      ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode,
+      stones
+    };
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
+    triggerDownload(blob, 'ring-config.txt');
+  };
+
+  const handleImportConfig = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const config = JSON.parse(event.target.result);
+        if (config && Array.isArray(config.stones)) {
+          setZoom(config.zoom || 1);
+          setBandColor(config.bandColor || 'gold');
+          setBandWidth(config.bandWidth || 4);
+          setIsFlatBand(config.isFlatBand || false);
+          setLayoutMode(config.layoutMode || 'cluster');
+          setShowSeparation(config.showSeparation || false);
+          setShowWidth(config.showWidth || false);
+          setShowVertical(config.showVertical || false);
+          setVerticalFrom(config.verticalFrom || 'top');
+
+          setMeasTextSize(config.measTextSize ?? 0.45);
+          setShowRuler(config.showRuler ?? true);
+          setRulerScale(config.rulerScale ?? 1);
+          setRulerOffset(config.rulerOffset ?? 0);
+
+          setRingSize(config.ringSize ?? 7);
+          setBandThickness(config.bandThickness ?? 1.8);
+          setGemRelief(config.gemRelief ?? 1.2);
+          setPocketDepthInput(config.pocketDepthInput ?? 0.75);
+          setUniqueStone3D(config.uniqueStone3D ?? false);
+          setInclude3DSettings(config.include3DSettings ?? true);
+          setCutoutMode(config.cutoutMode ?? 'pocket_and_gem');
+
+          setStones(config.stones);
+          setErrorMessage('');
+        } else throw new Error("Invalid structure");
+      } catch (error) {
+        setErrorMessage('Failed to load file. Ensure it is a valid Ring Config format.');
+        setTimeout(() => setErrorMessage(''), 4000);
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const effectiveStones = useMemo(() => {
+    return stones.map(stone => {
+      if (stone.linkedTo) {
+        const target = stones.find(s => s.id === stone.linkedTo);
+        if (target) {
+          return {
+            ...stone,
+            shape: target.shape,
+            colorMode: target.colorMode,
+            preset: target.preset,
+            color: target.color,
+            settingStyle: target.settingStyle,
+            bezelColor: target.bezelColor,
+            bezelSize: target.bezelSize,
+            width: target.width,
+            heightOffset: target.heightOffset,
+            rotation: (360 - (target.rotation || 0)) % 360,
+            gap: target.gap,
+            centerOffset: target.centerOffset,
+            side: target.side === 'left' ? 'right' : 'left',
+            haloSize: target.haloSize,
+            haloPreset: target.haloPreset,
+            haloColor: target.haloColor,
+            haloUniqueStones: target.haloUniqueStones,
+            haloOverrides: target.haloOverrides,
+            reliefOverride: target.reliefOverride,
+            pocketDepthOverride: target.pocketDepthOverride
+          };
+        }
+      }
+      return stone;
+    });
+  }, [stones]);
+
+  const renderedStones = useMemo(() => {
+    const positions = [];
+
+    if (layoutMode === 'scatter') {
+      let currentX = 0;
+      const relativePositions = effectiveStones.map((stone, index) => {
+        if (index === 0) return 0;
+        const prevWidth = Number(effectiveStones[index - 1].width) || 0;
+        currentX += (prevWidth / 2) + (Number(stone.gap) || 0) + (Number(stone.width) || 0) / 2;
+        return currentX;
+      });
+
+      const firstSize = Number(effectiveStones[0]?.width) || 0;
+      const lastSize = Number(effectiveStones[effectiveStones.length - 1]?.width) || 0;
+      const leftEdge = relativePositions[0] - (firstSize / 2);
+      const rightEdge = relativePositions[relativePositions.length - 1] + (lastSize / 2);
+      const clusterCenter = (leftEdge + rightEdge) / 2;
+      positions.push(...relativePositions.map(pos => pos - clusterCenter));
+    } else {
+      effectiveStones.forEach((stone, index) => {
+        if (index === 0) {
+          positions.push(0);
+        } else {
+          const offset = Number(stone.centerOffset) || 0;
+          positions.push(stone.side === 'left' ? -offset : offset);
+        }
+      });
+    }
+
+    const mappedStones = effectiveStones.map((stone, index) => ({
+      ...stone,
+      x: positions[index],
+      y: -(Number(stone.heightOffset) || 0),
+      originalIndex: index
+    }));
+
+    if (layoutMode === 'cluster') {
+      mappedStones.sort((a, b) => Math.abs(b.x) - Math.abs(a.x));
+    }
+    return mappedStones;
+  }, [effectiveStones, layoutMode]);
+
+  const ring3DData = useMemo(() => {
+    return build3DRingShells({
+      renderedStones,
+      bandWidth,
+      bandColor,
+      ringSize,
+      bandThickness,
+      gemRelief,
+      pocketDepthInput,
+      uniqueStone3D,
+      include3DSettings,
+      cutoutMode
+    });
+  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode]);
+
+  const handleExportSTL = useCallback(() => {
+    const blob = generateBinarySTLBlob(ring3DData.shells, bandWidth);
+    triggerDownload(blob, `mikeytime-ring-size-${ringSize}-welded.stl`);
+  }, [ring3DData, ringSize, bandWidth]);
+
+  const handleExport3MF = useCallback(() => {
+    const blob = generate3MFBlob(ring3DData.shells, bandWidth);
+    triggerDownload(blob, `mikeytime-ring-size-${ringSize}-multiobject.3mf`);
+  }, [ring3DData, ringSize, bandWidth]);
+
+  const handleExportSVG = () => {
+    if (!svgRef.current) return;
+    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    triggerDownload(blob, 'ring-design.svg');
+  };
+
+  const handleExportPNG = () => {
+    if (!svgRef.current) return;
+    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const canvas = document.createElement("canvas");
+    canvas.width = 1920;
+    canvas.height = 960;
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = () => {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob((blob) => {
+        triggerDownload(blob, 'ring-design.png');
+      }, 'image/png');
+    };
+    img.src = url;
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Stone Index', 'Role/Side', 'Shape', 'Width (mm)', 'Height (mm)', 'Color/Preset', 'Setting Style', 'Bezel Size (mm)', '3D Relief (mm)', '3D Socket Depth (mm)'];
+    const rows = effectiveStones.map((stone, i) => {
+      const h = (stone.width * (SHAPE_RATIOS[stone.shape] || 1)).toFixed(2);
+      let role = layoutMode === 'cluster' && i === 0 ? 'Center Anchor' : stone.side;
+      const stRelief = (uniqueStone3D && stone.reliefOverride !== '' && stone.reliefOverride !== undefined) ? stone.reliefOverride : gemRelief;
+      const stDepth = (uniqueStone3D && stone.pocketDepthOverride !== '' && stone.pocketDepthOverride !== undefined) ? stone.pocketDepthOverride : pocketDepthInput;
+      return [
+        i + 1, role, stone.shape, stone.width, h,
+        stone.colorMode === 'preset' ? stone.preset : stone.color,
+        stone.settingStyle, stone.settingStyle === 'Bezel' ? stone.bezelSize : 'N/A',
+        stRelief, stDepth
+      ].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    triggerDownload(blob, 'ring-bom.csv');
+  };
+
+  const svgWidthMM = 100;
+  const svgHeightMM = 50;
+
+  const getShapePath = (shape, hw, hh) => {
+    switch(shape) {
+      case 'Oval': return `M 0 ${-hh} A ${hw} ${hh} 0 1 1 0 ${hh} A ${hw} ${hh} 0 1 1 0 ${-hh}`;
+      case 'Cushion': {
+        const rx = hw * 0.4;
+        return `M ${-hw+rx} ${-hh} H ${hw-rx} A ${rx} ${rx} 0 0 1 ${hw} ${-hh+rx} V ${hh-rx} A ${rx} ${rx} 0 0 1 ${hw-rx} ${hh} H ${-hw+rx} A ${rx} ${rx} 0 0 1 ${-hw} ${hh-rx} V ${-hh+rx} A ${rx} ${rx} 0 0 1 ${-hw+rx} ${-hh} Z`;
+      }
+      case 'Emerald': {
+        const ce = hw * 0.3;
+        return `M ${-hw+ce} ${-hh} L ${hw-ce} ${-hh} L ${hw} ${-hh+ce} L ${hw} ${hh-ce} L ${hw-ce} ${hh} L ${-hw+ce} ${hh} L ${-hw} ${hh-ce} L ${-hw} ${-hh+ce} Z`;
+      }
+      case 'Princess': return `M ${-hw} ${-hh} H ${hw} V ${hh} H ${-hw} Z`;
+      case 'Hexagon': {
+        const sx = hw * 0.866025;
+        return `M 0 ${-hh} L ${sx} ${-hh*0.5} L ${sx} ${hh*0.5} L 0 ${hh} L ${-sx} ${hh*0.5} L ${-sx} ${-hh*0.5} Z`;
+      }
+      case 'Pear':
+        return `M 0 ${-hh} C ${hw*1.15} ${-hh*0.1}, ${hw*1.15} ${hh}, 0 ${hh} C ${-hw*1.15} ${hh}, ${-hw*1.15} ${-hh*0.1}, 0 ${-hh} Z`;
+      case 'Radiant': {
+        const cr = hw * 0.2;
+        return `M ${-hw+cr} ${-hh} L ${hw-cr} ${-hh} L ${hw} ${-hh+cr} L ${hw} ${hh-cr} L ${hw-cr} ${hh} L ${-hw+cr} ${hh} L ${-hw} ${hh-cr} L ${-hw} ${-hh+cr} Z`;
+      }
+      case 'Marquise':
+        return `M 0 ${-hh} C ${hw*1.1} ${-hh*0.3}, ${hw*1.1} ${hh*0.3}, 0 ${hh} C ${-hw*1.1} ${hh*0.3}, ${-hw*1.1} ${-hh*0.3}, 0 ${-hh} Z`;
+      case 'Asscher': {
+        const ca = hw * 0.5;
+        return `M ${-hw+ca} ${-hh} L ${hw-ca} ${-hh} L ${hw} ${-hh+ca} L ${hw} ${hh-ca} L ${hw-ca} ${hh} L ${-hw+ca} ${hh} L ${-hw} ${hh-ca} L ${-hw} ${-hh+ca} Z`;
+      }
+      case 'Heart':
+        return `M 0 ${-hh*0.2} C ${hw*1.2} ${-hh*1.2}, ${hw*1.2} ${hh*0.4}, 0 ${hh} C ${-hw*1.2} ${hh*0.4}, ${-hw*1.2} ${-hh*1.2}, 0 ${-hh*0.2} Z`;
+      case 'Crescent Moon':
+        return `M ${-hw*0.25} ${-hh} A ${hw} ${hh} 0 0 1 ${-hw*0.25} ${hh} A ${hw*0.5} ${hh} 0 0 0 ${-hw*0.25} ${-hh} Z`;
+      case 'Round Brilliant':
+      default: return `M 0 ${-hw} A ${hw} ${hw} 0 1 1 0 ${hw} A ${hw} ${hw} 0 1 1 0 ${-hw}`;
+    }
+  };
+
+  const renderSetting = (stone, hw, hh, pSize, basePath) => {
+    const { settingStyle: style, shape, bezelSize = 0.5, bezelColor = 'gold' } = stone;
+
+    const mColorBand = METAL_COLORS[bandColor];
+    const bandFill = isFlatBand ? mColorBand.flat : mColorBand.gradient;
+    const mColorBezel = METAL_COLORS[bezelColor];
+    const bezelFill = isFlatBand ? mColorBezel.flat : mColorBezel.gradient;
+    const bezelOutline = isFlatBand ? mColorBezel.dark : 'none';
+
+    if (style === 'Halo') {
+      const hSize = stone.haloSize || 1.0;
+      const hData = getHaloData(shape, hw, hh, hSize);
+      const r = hSize / 2;
+      const metalCenterLine = hData.stones.map(p => `${p.x},${p.y}`).join(' L ');
+
+      return (
+        <g>
+          <path d={`M ${metalCenterLine} Z`} fill="none" stroke={bandFill} strokeWidth={hSize * 1.2} strokeLinejoin="round" filter={isFlatBand ? undefined : "url(#drop-shadow)"} />
+          {hData.stones.map((p, i) => {
+            const fill = stone.haloOverrides?.[i] || stone.haloColor || '#fbfbfb';
+            return (
+              <g key={i} transform={`translate(${p.x}, ${p.y})`}>
+                <circle cx="0" cy="0" r={r} fill={fill} filter={isFlatBand ? undefined : "url(#drop-shadow)"} />
+                <circle cx="0" cy="0" r={r*0.7} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={r*0.1} />
+                <circle cx="0" cy="0" r={r*0.3} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={r*0.1} />
+              </g>
+            );
+          })}
+        </g>
+      );
+    }
+
+    if (style === 'Bezel') {
+      const contourPts = getShapeOutlinePoints(shape, hw, hh, 96);
+      const outerBezelPts = offsetPolygon2D(contourPts, bezelSize, shape);
+      const outerBezelPath = pointsToSVGPath(outerBezelPts);
+      const compoundBezelPath = `${outerBezelPath} ${basePath}`;
+
+      return (
+        <g>
+          <path
+            d={compoundBezelPath}
+            fill={bezelFill}
+            fillRule="evenodd"
+            stroke={isFlatBand ? bezelOutline : 'none'}
+            strokeWidth={isFlatBand ? 0.15 : 0}
+            filter={isFlatBand ? undefined : "url(#drop-shadow)"}
+          />
+        </g>
+      );
+    }
+
+    if (style === 'Flush') {
+      return (
+        <g>
+          <path d={basePath} stroke="rgba(0,0,0,0.45)" strokeWidth={0.28} fill="none" />
+          <path d={basePath} stroke={bandFill} strokeWidth={0.14} strokeDasharray="0.4,0.2" fill="none" />
+        </g>
+      );
+    }
+
+    if (style === '4-Prong' || style === '6-Prong') {
+      const prongs = getProngPositions(style, shape, hw, hh);
+      return prongs.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#drop-shadow)"} />);
+    }
+
+    if (style === 'V-Prong') {
+      const strokeW = Math.max(0.2, hw * 0.1);
+      const vProngSpec = getVProngData(shape, hw, hh);
+      return (
+        <g>
+          <g stroke={bandFill} strokeWidth={strokeW} fill="none" strokeLinejoin="miter" strokeLinecap="square" filter={isFlatBand ? undefined : "url(#drop-shadow)"}>
+            {vProngSpec.chevrons.map((c, i) => (
+              <polyline key={`vchev-${i}`} points={`${c.a.x},${c.a.y} ${c.v.x},${c.v.y} ${c.b.x},${c.b.y}`} />
+            ))}
+          </g>
+          {vProngSpec.roundProngs.map((p, i) => (
+            <circle key={`vrnd-${i}`} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#drop-shadow)"} />
+          ))}
+        </g>
+      );
+    }
+    return null;
+  };
+
+  const viewBoxWidth = svgWidthMM / zoom;
+  const viewBoxHeight = svgHeightMM / zoom;
+  const viewBoxX = -viewBoxWidth / 2;
+  const viewBoxY = -viewBoxHeight / 2;
+  const viewBottom = viewBoxHeight / 2;
+
+  const rulerTicks = [];
+  if (showRuler) {
+    const startX = Math.floor(viewBoxX);
+    const endX = Math.ceil(viewBoxX + viewBoxWidth);
+    for (let i = startX - 2; i <= endX + 2; i++) {
+      if (i < -(svgWidthMM/2) || i > (svgWidthMM/2)) continue;
+      const isMajor = i % 10 === 0;
+      const isMedium = i % 5 === 0;
+      const height = (isMajor ? 3 : isMedium ? 2 : 1) * rulerScale;
+      rulerTicks.push(
+        <g key={`tick-${i}`}>
+          <line x1={i} y1={viewBottom} x2={i} y2={viewBottom - height} stroke="rgba(0,0,0,0.4)" strokeWidth={0.2 * rulerScale} />
+          {isMajor && (
+            <text x={i} y={viewBottom - height - (0.5 * rulerScale)} fontSize={2.5 * rulerScale} textAnchor="middle" fill="rgba(0,0,0,0.5)" fontWeight="bold">
+              {Math.abs(i)}
+            </text>
+          )}
+        </g>
+      );
+    }
+  }
+
+  return (
+    <div className="h-screen bg-gray-100 flex flex-col font-sans overflow-hidden">
+
+      <div className="bg-white shadow-md z-10 shrink-0 border-b border-gray-200 flex flex-col relative">
+        {errorMessage && (
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded shadow-lg flex items-center gap-2 z-50 animate-bounce">
+            <AlertCircle className="w-4 h-4" /> {errorMessage}
+          </div>
+        )}
+        <div className="px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center bg-purple-950 text-white gap-3">
+          <div className="flex items-center gap-3">
+            <Gem className="w-6 h-6 text-emerald-400" />
+            <h1 className="text-base sm:text-lg font-bold tracking-wide">MikeyTime Ring Studio</h1>
+          </div>
+
+          <div className="flex bg-purple-900/90 p-1 rounded-lg border border-purple-800">
+            <button
+              onClick={() => setCanvasViewMode('2d')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                canvasViewMode === '2d' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-purple-200 hover:text-white'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" /> 2D Blueprint
+            </button>
+            <button
+              onClick={() => setCanvasViewMode('3d')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                canvasViewMode === '3d' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-purple-200 hover:text-white'
+              }`}
+            >
+              <Box className="w-3.5 h-3.5" /> 3D Ring Preview ({ring3DData.shells.length} Shells)
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <button
+              onClick={handleExportSTL}
+              title="Export Welded Multi-Shell STL (1 Band with Carved Sockets + Individual Gems)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow transition-colors"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>3D STL</span>
+            </button>
+
+            <button
+              onClick={handleExport3MF}
+              title="Export Native Multi-Object 3MF (Pre-Named Objects for OrcaSlicer / Bambu / Anycubic)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold shadow transition-colors"
+            >
+              <PackageCheck className="w-3.5 h-3.5" />
+              <span>3D 3MF</span>
+            </button>
+
+            <div className="flex bg-purple-900 rounded-md border border-purple-800 overflow-hidden divide-x divide-purple-800">
+              <button onClick={handleExportPNG} title="Export as PNG Image" className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-purple-800 text-xs font-semibold transition-colors">
+                <ImageIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">PNG</span>
+              </button>
+              <button onClick={handleExportSVG} title="Export as SVG Vector" className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-purple-800 text-xs font-semibold transition-colors">
+                <FileCode2 className="w-3.5 h-3.5" /> <span className="hidden lg:inline">SVG</span>
+              </button>
+              <button onClick={handleExportCSV} title="Export Bill of Materials (CSV)" className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-purple-800 text-xs font-semibold transition-colors">
+                <Table className="w-3.5 h-3.5" /> <span className="hidden lg:inline">BOM</span>
+              </button>
+            </div>
+
+            <div className="flex bg-purple-900 rounded-md border border-purple-800 overflow-hidden divide-x divide-purple-800">
+              <button onClick={handleExportConfig} className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-purple-800 text-xs font-semibold transition-colors">
+                <Download className="w-3.5 h-3.5" /> <span className="hidden md:inline">Save</span>
+              </button>
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-purple-800 text-xs font-semibold transition-colors">
+                <Upload className="w-3.5 h-3.5" /> <span className="hidden md:inline">Load</span>
+              </button>
+              <input type="file" accept=".txt" ref={fileInputRef} onChange={handleImportConfig} className="hidden" />
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full bg-slate-50 relative flex justify-center items-center py-4 px-4 shadow-inner overflow-hidden">
+          {canvasViewMode === '3d' ? (
+            <Ring3DPreviewCanvas
+              shells={ring3DData.shells}
+              innerDiameter={ring3DData.innerDiameter}
+              outerDiameter={ring3DData.outerDiameter}
+              onExportSTL={handleExportSTL}
+              onExport3MF={handleExport3MF}
+              externalCameraRequest={externalCameraRequest}
+              explodeParts={explode3DParts}
+              setExplodeParts={setExplode3DParts}
+            />
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              ref={svgRef}
+              viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`}
+              className="w-full max-w-5xl h-auto drop-shadow-2xl bg-white border border-gray-300 rounded shadow-xl transition-all duration-300 ease-out cursor-crosshair"
+              style={{ maxHeight: '35vh' }}
+            >
+              <defs>
+                <pattern id="smallGrid" width="1" height="1" patternUnits="userSpaceOnUse" x="-50" y="-25">
+                  <path d="M 1 0 L 0 0 0 1" fill="none" stroke="rgba(16, 185, 129, 0.1)" strokeWidth="0.05" />
+                </pattern>
+                <pattern id="largeGrid" width="10" height="10" patternUnits="userSpaceOnUse" x="-50" y="-25">
+                  <rect width="10" height="10" fill="url(#smallGrid)" />
+                  <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(16, 185, 129, 0.3)" strokeWidth="0.1" />
+                </pattern>
+
+                <linearGradient id="band-gold" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#c5a059" />
+                  <stop offset="20%" stopColor="#f4e0a6" />
+                  <stop offset="50%" stopColor="#d4af37" />
+                  <stop offset="80%" stopColor="#8a6b1c" />
+                  <stop offset="100%" stopColor="#c5a059" />
+                </linearGradient>
+                <linearGradient id="band-silver" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#b5b6b8" />
+                  <stop offset="20%" stopColor="#ffffff" />
+                  <stop offset="50%" stopColor="#e3e4e5" />
+                  <stop offset="80%" stopColor="#8f9193" />
+                  <stop offset="100%" stopColor="#b5b6b8" />
+                </linearGradient>
+                <linearGradient id="band-black" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#333333" />
+                  <stop offset="20%" stopColor="#666666" />
+                  <stop offset="50%" stopColor="#222222" />
+                  <stop offset="80%" stopColor="#0a0a0a" />
+                  <stop offset="100%" stopColor="#222222" />
+                </linearGradient>
+
+                <radialGradient id="gemShade" cx="30%" cy="30%" r="70%">
+                  <stop offset="0%" stopColor="rgba(255,255,255,0.8)" />
+                  <stop offset="40%" stopColor="rgba(255,255,255,0)" />
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.6)" />
+                </radialGradient>
+
+                <filter id="drop-shadow" x="-30%" y="-30%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="0.5" stdDeviation="0.5" floodOpacity="0.4" />
+                </filter>
+              </defs>
+
+              <rect x={-svgWidthMM/2} y={-svgHeightMM/2} width={svgWidthMM} height={svgHeightMM} fill="url(#largeGrid)" />
+
+              <line x1={0} y1={-svgHeightMM/2} x2={0} y2={svgHeightMM/2} stroke="rgba(255,0,0,0.2)" strokeWidth="0.2" strokeDasharray="1,1" />
+              <line x1={-svgWidthMM/2} y1={0} x2={svgWidthMM/2} y2={0} stroke="rgba(255,0,0,0.2)" strokeWidth="0.2" strokeDasharray="1,1" />
+
+              <rect
+                x={-svgWidthMM/2}
+                y={-(Number(bandWidth) / 2)}
+                width={svgWidthMM}
+                height={Number(bandWidth) || 0}
+                fill={isFlatBand ? METAL_COLORS[bandColor].flat : `url(#band-${bandColor})`}
+                filter={isFlatBand ? undefined : "url(#drop-shadow)"}
+              />
+
+              {!isFlatBand && (
+                <>
+                  <rect x={-svgWidthMM/2} y={-(Number(bandWidth) / 2) + 0.2} width={svgWidthMM} height={(Number(bandWidth) || 0) * 0.1} fill="rgba(255,255,255,0.4)" />
+                  <rect x={-svgWidthMM/2} y={(Number(bandWidth) / 2) - ((Number(bandWidth) || 0) * 0.15)} width={svgWidthMM} height={(Number(bandWidth) || 0) * 0.1} fill="rgba(0,0,0,0.2)" />
+                </>
+              )}
+
+              {renderedStones.map((stone) => {
+                const w = Number(stone.width) || 0;
+                const shape = stone.shape || 'Round Brilliant';
+                const ratio = SHAPE_RATIOS[shape] || 1;
+                const h = w * ratio;
+                const hw = w / 2;
+                const hh = h / 2;
+                const rotation = Number(stone.rotation) || 0;
+
+                const basePath = getShapePath(shape, hw, hh);
+                const isStep = shape === 'Emerald' || shape === 'Asscher';
+                const pSize = hw * 0.15;
+
+                return (
+                  <g
+                    key={`stone-svg-${stone.id}`}
+                    transform={`translate(${stone.x}, ${stone.y})`}
+                    filter={isFlatBand ? undefined : "url(#drop-shadow)"}
+                  >
+                    <g transform={`rotate(${rotation})`}>
+                      <path d={basePath} fill={stone.color} />
+                      <g stroke="rgba(255,255,255,0.5)" strokeWidth={hw * 0.04} fill="none">
+                        {isStep ? (
+                          <>
+                            <path d={getShapePath(shape, hw*0.75, hh*0.75)} fill="rgba(255,255,255,0.1)" />
+                            <path d={getShapePath(shape, hw*0.5, hh*0.5)} />
+                            <path d={getShapePath(shape, hw*0.25, hh*0.25)} />
+                            <line x1={-hw} y1={-hh} x2={0} y2={0} />
+                            <line x1={hw} y1={-hh} x2={0} y2={0} />
+                            <line x1={-hw} y1={hh} x2={0} y2={0} />
+                            <line x1={hw} y1={hh} x2={0} y2={0} />
+                          </>
+                        ) : shape === 'Heart' || shape === 'Crescent Moon' ? (
+                          <>
+                            <path d={getShapePath(shape, hw*0.8, hh*0.8)} strokeWidth={hw * 0.02} />
+                            <path d={getShapePath(shape, hw*0.5, hh*0.5)} strokeWidth={hw * 0.015} fill="rgba(255,255,255,0.1)" />
+                          </>
+                        ) : shape === 'Hexagon' ? (
+                          <>
+                            <path d={getShapePath('Hexagon', hw*0.6, hh*0.6)} fill="rgba(255,255,255,0.1)" strokeWidth={hw * 0.02} />
+                            <line x1={0} y1={-hh} x2={0} y2={-hh*0.6} />
+                            <line x1={hw*0.866} y1={-hh*0.5} x2={hw*0.52} y2={-hh*0.3} />
+                            <line x1={hw*0.866} y1={hh*0.5} x2={hw*0.52} y2={hh*0.3} />
+                            <line x1={0} y1={hh} x2={0} y2={hh*0.6} />
+                            <line x1={-hw*0.866} y1={hh*0.5} x2={-hw*0.52} y2={hh*0.3} />
+                            <line x1={-hw*0.866} y1={-hh*0.5} x2={-hw*0.52} y2={-hh*0.3} />
+                            <path d={getShapePath('Hexagon', hw*0.9, hh*0.9)} strokeWidth={hw * 0.02} />
+                          </>
+                        ) : (
+                          <>
+                            <polygon points={`${-hw*0.2},${-hh*0.5} ${hw*0.2},${-hh*0.5} ${hw*0.5},${-hh*0.2} ${hw*0.5},${hh*0.2} ${hw*0.2},${hh*0.5} ${-hw*0.2},${hh*0.5} ${-hw*0.5},${hh*0.2} ${-hw*0.5},${-hh*0.2}`} fill="rgba(255,255,255,0.15)" />
+                            <line x1={-hw*0.2} y1={-hh*0.5} x2={-hw*0.6} y2={-hh*0.6} />
+                            <line x1={hw*0.2} y1={-hh*0.5} x2={hw*0.6} y2={-hh*0.6} />
+                            <line x1={hw*0.5} y1={-hh*0.2} x2={hw*0.8} y2={0} />
+                            <line x1={hw*0.5} y1={hh*0.2} x2={hw*0.8} y2={0} />
+                            <line x1={hw*0.2} y1={hh*0.5} x2={hw*0.6} y2={hh*0.6} />
+                            <line x1={-hw*0.2} y1={hh*0.5} x2={-hw*0.6} y2={hh*0.6} />
+                            <line x1={-hw*0.5} y1={hh*0.2} x2={-hw*0.8} y2={0} />
+                            <line x1={-hw*0.5} y1={-hh*0.2} x2={-hw*0.8} y2={0} />
+                            <path d={getShapePath(shape, hw*0.9, hh*0.9)} strokeWidth={hw * 0.02} />
+                          </>
+                        )}
+                      </g>
+                      {stone.settingStyle && stone.settingStyle !== 'None' && renderSetting(stone, hw, hh, pSize, basePath)}
+                    </g>
+
+                    <g clipPath={`url(#clip-${stone.id})`}>
+                      <rect x={-hw * 2} y={-hh * 2} width={hw * 4} height={hh * 4} fill="url(#gemShade)" pointerEvents="none" />
+                    </g>
+                    <clipPath id={`clip-${stone.id}`}>
+                      <path d={basePath} transform={`rotate(${rotation})`} />
+                    </clipPath>
+                  </g>
+                );
+              })}
+
+              <g id="measurements">
+                {showVertical && renderedStones.map((stone) => {
+                  const targetY = verticalFrom === 'top' ? -(Number(bandWidth) / 2) : (Number(bandWidth) / 2);
+                  const startY = stone.y;
+                  const endY = targetY;
+                  const midY = (startY + endY) / 2;
+                  const dist = Math.abs(startY - endY);
+                  const textStr = `${dist.toFixed(1)}mm`;
+                  const boxW = textStr.length * (measTextSize * 0.62) + 0.4;
+                  const boxH = measTextSize * 1.45 + 0.2;
+
+                  return (
+                    <g key={`v-meas-${stone.id}`}>
+                      <line x1={stone.x} y1={startY} x2={stone.x} y2={endY} stroke="#ec4899" strokeWidth="0.08" strokeDasharray="0.5,0.5" />
+                      <line x1={stone.x - 0.5} y1={endY} x2={stone.x + 0.5} y2={endY} stroke="#ec4899" strokeWidth="0.08" />
+                      <line x1={stone.x - 0.5} y1={startY} x2={stone.x + 0.5} y2={startY} stroke="#ec4899" strokeWidth="0.08" />
+                      <rect x={stone.x - boxW/2} y={midY - boxH/2} width={boxW} height={boxH} fill="rgba(255,255,255,0.9)" stroke="#fbcfe8" strokeWidth="0.04" rx="0.25" />
+                      <text x={stone.x} y={midY + (measTextSize * 0.35)} fontSize={measTextSize} textAnchor="middle" fill="#ec4899" fontWeight="bold">
+                        {textStr}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {showWidth && (() => {
+                  const maxY = renderedStones.length > 0 ? Math.max(...renderedStones.map(s => s.y + (s.width * (SHAPE_RATIOS[s.shape] || 1)) / 2)) : 0;
+                  const bandBottom = Number(bandWidth) / 2;
+                  const widthMeasY = Math.max(bandBottom, maxY) + 3.2;
+
+                  const widthItems = renderedStones.map(stone => {
+                    const textStr = `${stone.width.toFixed(1)}mm`;
+                    const boxW = textStr.length * (measTextSize * 0.62) + 0.4;
+                    const spanW = Math.max(stone.width, boxW);
+                    return {
+                      ...stone,
+                      textStr,
+                      boxW,
+                      boxH: measTextSize * 1.45 + 0.2,
+                      leftX: stone.x - spanW / 2,
+                      rightX: stone.x + spanW / 2,
+                      gemBottom: stone.y + (stone.width * (SHAPE_RATIOS[stone.shape] || 1)) / 2
+                    };
+                  }).sort((a, b) => a.x - b.x);
+
+                  const tiers = [];
+                  widthItems.forEach(item => {
+                    let placed = false;
+                    for (let t = 0; t < tiers.length; t++) {
+                      if (item.leftX > tiers[t] + (measTextSize * 0.9)) {
+                        item.tier = t;
+                        tiers[t] = item.rightX;
+                        placed = true;
+                        break;
+                      }
+                    }
+                    if (!placed) {
+                      item.tier = tiers.length;
+                      tiers.push(item.rightX);
+                    }
+                  });
+
+                  return widthItems.map(item => {
+                    const yPos = widthMeasY + (item.tier * (measTextSize * 2.2 + 0.9));
+                    const extLeftX = item.x - item.width / 2;
+                    const extRightX = item.x + item.width / 2;
+
+                    return (
+                      <g key={`w-meas-${item.id}`}>
+                        <line x1={extLeftX} y1={yPos} x2={extRightX} y2={yPos} stroke="#10b981" strokeWidth="0.08" strokeDasharray="0.8,0.8" />
+                        <line x1={extLeftX} y1={yPos - 0.8} x2={extLeftX} y2={yPos + 0.8} stroke="#10b981" strokeWidth="0.08" />
+                        <line x1={extRightX} y1={yPos - 0.8} x2={extRightX} y2={yPos + 0.8} stroke="#10b981" strokeWidth="0.08" />
+
+                        <line x1={extLeftX} y1={item.gemBottom} x2={extLeftX} y2={yPos} stroke="#10b981" strokeWidth="0.05" strokeDasharray="0.4,0.4" opacity="0.55" />
+                        <line x1={extRightX} y1={item.gemBottom} x2={extRightX} y2={yPos} stroke="#10b981" strokeWidth="0.05" strokeDasharray="0.4,0.4" opacity="0.55" />
+
+                        <rect x={item.x - item.boxW/2} y={yPos - item.boxH/2} width={item.boxW} height={item.boxH} fill="rgba(255,255,255,0.92)" stroke="#a7f3d0" strokeWidth="0.04" rx="0.25" />
+                        <text x={item.x} y={yPos + (measTextSize * 0.35)} fontSize={measTextSize} textAnchor="middle" fill="#10b981" fontWeight="bold">
+                          {item.textStr}
+                        </text>
+                      </g>
+                    );
+                  });
+                })()}
+
+                {showSeparation && (() => {
+                  const sortedStones = [...renderedStones].sort((a, b) => a.x - b.x);
+                  const gapItems = [];
+
+                  for (let i = 0; i < sortedStones.length - 1; i++) {
+                    const s1 = sortedStones[i];
+                    const s2 = sortedStones[i+1];
+                    const rightEdge1 = s1.x + s1.width / 2;
+                    const leftEdge2 = s2.x - s2.width / 2;
+                    const gap = leftEdge2 - rightEdge1;
+                    const midX = (rightEdge1 + leftEdge2) / 2;
+
+                    const y1 = s1.y - (s1.width * (SHAPE_RATIOS[s1.shape] || 1)) / 2;
+                    const y2 = s2.y - (s2.width * (SHAPE_RATIOS[s2.shape] || 1)) / 2;
+                    const baseMidY = Math.min(y1, y2) - 3.2;
+
+                    const textStr = `${gap.toFixed(1)}mm`;
+                    const boxW = textStr.length * (measTextSize * 0.62) + 0.4;
+                    const boxH = measTextSize * 1.45 + 0.2;
+                    const spanW = Math.max(gap, boxW);
+
+                    if (gap > 0.01) {
+                      gapItems.push({
+                        id: `gap-${i}`, rightEdge1, leftEdge2, midX, baseMidY,
+                        textStr, boxW, boxH, s1, s2, gap,
+                        leftX: midX - spanW / 2, rightX: midX + spanW / 2
+                      });
+                    }
+                  }
+
+                  const tiers = [];
+                  gapItems.forEach(item => {
+                    let placed = false;
+                    for (let t = 0; t < tiers.length; t++) {
+                      if (item.leftX > tiers[t] + (measTextSize * 0.9)) {
+                        item.tier = t;
+                        tiers[t] = item.rightX;
+                        placed = true;
+                        break;
+                      }
+                    }
+                    if (!placed) {
+                      item.tier = tiers.length;
+                      tiers.push(item.rightX);
+                    }
+                  });
+
+                  return gapItems.map(item => {
+                    const midY = item.baseMidY - (item.tier * (measTextSize * 2.2 + 0.9));
+                    return (
+                      <g key={item.id}>
+                        <line x1={item.rightEdge1} y1={midY} x2={item.leftEdge2} y2={midY} stroke="#0ea5e9" strokeWidth="0.08" strokeDasharray="0.8,0.8" />
+                        <line x1={item.rightEdge1} y1={midY - 0.8} x2={item.rightEdge1} y2={midY + 0.8} stroke="#0ea5e9" strokeWidth="0.08" />
+                        <line x1={item.leftEdge2} y1={midY - 0.8} x2={item.leftEdge2} y2={midY + 0.8} stroke="#0ea5e9" strokeWidth="0.08" />
+
+                        <line x1={item.rightEdge1} y1={midY} x2={item.rightEdge1} y2={item.s1.y} stroke="#0ea5e9" strokeWidth="0.05" strokeDasharray="0.4,0.4" opacity="0.6" />
+                        <line x1={item.leftEdge2} y1={midY} x2={item.leftEdge2} y2={item.s2.y} stroke="#0ea5e9" strokeWidth="0.05" strokeDasharray="0.4,0.4" opacity="0.6" />
+
+                        <rect x={item.midX - item.boxW/2} y={midY - item.boxH/2} width={item.boxW} height={item.boxH} fill="rgba(255,255,255,0.92)" stroke="#bae6fd" strokeWidth="0.04" rx="0.25" />
+                        <text x={item.midX} y={midY + (measTextSize * 0.35)} fontSize={measTextSize} textAnchor="middle" fill="#0ea5e9" fontWeight="bold">
+                          {item.textStr}
+                        </text>
+                      </g>
+                    );
+                  });
+                })()}
+              </g>
+
+              {showRuler && (
+                <g transform={`translate(0, ${rulerOffset})`}>
+                  <rect x={viewBoxX} y={viewBottom - (7 * rulerScale)} width={viewBoxWidth} height={7 * rulerScale} fill="rgba(255,255,255,0.75)" />
+                  <line x1={viewBoxX} y1={viewBottom - 0.1} x2={viewBoxX + viewBoxWidth} y2={viewBottom - 0.1} stroke="rgba(0,0,0,0.3)" strokeWidth={0.2 * rulerScale} />
+                  {rulerTicks}
+                </g>
+              )}
+            </svg>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth">
+        <div className="max-w-7xl mx-auto space-y-6">
+
+          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all">
+            <div
+              onClick={() => setIsGlobalSettingsOpen(prev => !prev)}
+              className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3.5 bg-white hover:bg-gray-50/80 cursor-pointer select-none border-b border-gray-100 gap-3 transition-colors"
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-emerald-500" />
+                  <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                    Global Ring Settings
+                  </h2>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-semibold capitalize bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    {bandColor} Metal
+                  </span>
+                  <span className="text-[11px] font-mono font-semibold bg-gray-100 text-gray-700 border border-gray-200 px-2 py-0.5 rounded-full">
+                    {bandWidth}mm Band
+                  </span>
+                  <span className="text-[11px] font-semibold capitalize bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">
+                    {layoutMode} Layout
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between md:justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button
+                    onClick={() => setLayoutMode('cluster')}
+                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
+                      layoutMode === 'cluster' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    <CircleDot className="w-3.5 h-3.5" />
+                    Cluster Layout
+                  </button>
+                  <button
+                    onClick={() => setLayoutMode('scatter')}
+                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
+                      layoutMode === 'scatter' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    <AlignHorizontalJustifyCenter className="w-3.5 h-3.5" />
+                    Scatter Layout
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setIsGlobalSettingsOpen(prev => !prev)}
+                  className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 border border-gray-200 hover:border-emerald-200 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <span>{isGlobalSettingsOpen ? 'Hide' : 'Show'}</span>
+                  {isGlobalSettingsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {isGlobalSettingsOpen && (
+              <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6 items-start bg-white">
+                <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-3.5">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 block mb-2">Metal Type</label>
+                    <div className="flex gap-2">
+                      {['gold', 'silver', 'black'].map((metal) => (
+                        <button
+                          key={metal}
+                          onClick={() => setBandColor(metal)}
+                          className={`flex-1 py-1.5 px-3 rounded-md font-medium text-sm capitalize transition-all border-2 ${
+                            bandColor === metal
+                              ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {metal}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                    <label className="text-xs font-bold text-gray-700 cursor-pointer select-none" htmlFor="flat-band">
+                      Flat Band (No 3D/Shadow)
+                    </label>
+                    <input
+                      id="flat-band"
+                      type="checkbox"
+                      checked={isFlatBand}
+                      onChange={(e) => setIsFlatBand(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                    <label className="text-xs font-bold text-gray-700 cursor-pointer select-none" htmlFor="show-bottom-ruler">
+                      Show Bottom Ruler
+                    </label>
+                    <input
+                      id="show-bottom-ruler"
+                      type="checkbox"
+                      checked={showRuler}
+                      onChange={(e) => setShowRuler(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-3">
+                  <label className="text-sm font-semibold text-gray-600 border-b border-gray-200 pb-1">
+                    Band &amp; Viewport Dimensions
+                  </label>
+                  <ControlSlider label="Band Width" icon={ArrowUpDown} value={bandWidth} min={1} max={10} step={0.25} onChange={setBandWidth} />
+                  <ControlSlider label="Canvas Zoom" icon={ZoomIn} value={zoom} min={1} max={10} step={0.25} onChange={setZoom} unit="x" />
+                  {showRuler && (
+                    <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 flex flex-col gap-2">
+                      <ControlSlider label="Ruler Scale" value={rulerScale} min={0.4} max={2.5} step={0.1} onChange={setRulerScale} unit="x" />
+                      <ControlSlider label="Ruler Offset" value={rulerOffset} min={-15} max={15} step={0.5} onChange={setRulerOffset} unit="mm" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <label className="text-sm font-semibold text-gray-600 border-b border-gray-200 pb-1">
+                    Measurement Overlays
+                  </label>
+                  <ControlSlider label="Text Size" icon={Type} value={measTextSize} min={0.2} max={1.2} step={0.05} onChange={setMeasTextSize} unit="mm" />
+                  <div className="flex flex-col gap-2">
+                    <div className="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-2">
+                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
+                        <input type="checkbox" checked={showWidth} onChange={e => setShowWidth(e.target.checked)} className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer" />
+                        Gem Widths
+                      </label>
+                    </div>
+
+                    <div className="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-2">
+                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
+                        <input type="checkbox" checked={showSeparation} onChange={e => setShowSeparation(e.target.checked)} className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer" />
+                        Gem Separation (Gaps)
+                      </label>
+                    </div>
+
+                    <div className="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-2">
+                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
+                        <input type="checkbox" checked={showVertical} onChange={e => setShowVertical(e.target.checked)} className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer" />
+                        Vertical Drop Distance
+                      </label>
+                      {showVertical && (
+                        <div className="flex gap-1.5 ml-5 mt-1">
+                          <button onClick={() => setVerticalFrom('top')} className={`flex-1 text-[10px] uppercase font-bold px-2 py-1 rounded transition-colors ${verticalFrom === 'top' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>From Top</button>
+                          <button onClick={() => setVerticalFrom('bottom')} className={`flex-1 text-[10px] uppercase font-bold px-2 py-1 rounded transition-colors ${verticalFrom === 'bottom' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>From Bottom</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all">
+            <div
+              onClick={() => setIs3DSettingsOpen(prev => !prev)}
+              className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3.5 bg-white hover:bg-gray-50/80 cursor-pointer select-none border-b border-gray-100 gap-3 transition-colors"
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Box className="w-5 h-5 text-emerald-600" />
+                  <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                    3D View &amp; Print Settings
+                  </h2>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    US Size {ringSize} (Ø {ring3DData.innerDiameter.toFixed(2)}mm)
+                  </span>
+                  <span className="text-[11px] font-mono font-semibold text-gray-700 bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200">
+                    {bandThickness.toFixed(1)}mm Thick
+                  </span>
+                  <span className="text-[11px] font-mono font-semibold text-cyan-700 bg-cyan-50 px-2.5 py-0.5 rounded-full border border-cyan-200">
+                    {uniqueStone3D ? 'Unique Stone Heights' : (gemRelief === 0 ? 'Flush (0.0mm)' : `${gemRelief.toFixed(1)}mm Relief`)}
+                  </span>
+                  <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
+                    {cutoutMode === 'pocket_and_gem' ? 'Pocket + Gem' : cutoutMode === 'sockets_only' ? 'Empty Sockets' : 'Solid Band'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between md:justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setCanvasViewMode(canvasViewMode === '3d' ? '2d' : '3d')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-colors ${
+                    canvasViewMode === '3d'
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-500 shadow-sm'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
+                  }`}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  {canvasViewMode === '3d' ? 'Viewing 3D Ring' : 'Switch to 3D View'}
+                </button>
+
+                <button
+                  onClick={() => setIs3DSettingsOpen(prev => !prev)}
+                  className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 border border-gray-200 hover:border-emerald-200 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <span>{is3DSettingsOpen ? 'Hide' : 'Show'}</span>
+                  {is3DSettingsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {is3DSettingsOpen && (
+              <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6 items-start bg-white">
+                <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-3.5">
+                  <label className="text-sm font-semibold text-gray-600 border-b border-gray-200 pb-1">
+                    Viewport &amp; 3D Camera Controls
+                  </label>
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Active Canvas Mode</span>
+                    <div className="grid grid-cols-2 gap-1.5 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                      <button
+                        onClick={() => setCanvasViewMode('2d')}
+                        className={`py-1.5 px-2 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          canvasViewMode === '2d'
+                            ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                            : 'text-gray-500 hover:text-gray-800'
+                        }`}
+                      >
+                        <Compass className="w-3.5 h-3.5" />
+                        2D Blueprint
+                      </button>
+                      <button
+                        onClick={() => setCanvasViewMode('3d')}
+                        className={`py-1.5 px-2 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          canvasViewMode === '3d'
+                            ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                            : 'text-gray-500 hover:text-gray-800'
+                        }`}
+                      >
+                        <Box className="w-3.5 h-3.5" />
+                        3D Ring Preview
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">3D Camera Presets</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        onClick={() => apply3DCameraPreset('Crown', 0, 0, 1.35)}
+                        className="py-1.5 px-2 rounded border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-[11px] font-bold text-gray-700 transition-colors"
+                      >
+                        Crown View
+                      </button>
+                      <button
+                        onClick={() => apply3DCameraPreset('3/4', 35, -22, 1.2)}
+                        className="py-1.5 px-2 rounded border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-[11px] font-bold text-gray-700 transition-colors"
+                      >
+                        3/4 View
+                      </button>
+                      <button
+                        onClick={() => apply3DCameraPreset('Profile', 82, 0, 1.15)}
+                        className="py-1.5 px-2 rounded border border-gray-200 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-[11px] font-bold text-gray-700 transition-colors"
+                      >
+                        Profile View
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-gray-700">Inspect Slicer Parts (Explode)</span>
+                      <span className="text-[10px] text-gray-500">Separate gems radially from carved sockets</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setCanvasViewMode('3d');
+                        setExplode3DParts(prev => (prev === 0 ? 1 : 0));
+                      }}
+                      className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                        explode3DParts > 0
+                          ? 'bg-amber-400 text-slate-950 shadow-sm'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                      }`}
+                    >
+                      {explode3DParts > 0 ? 'Exploded' : 'Normal'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between border-b border-gray-200 pb-1">
+                    <label className="text-sm font-semibold text-gray-600">
+                      Ring Sizing &amp; Socket Geometry
+                    </label>
+                    <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Bore Ø {ring3DData.innerDiameter.toFixed(2)}mm
+                    </span>
+                  </div>
+
+                  <ControlSlider label="US Ring Size" value={ringSize} min={3} max={15} step={0.25} onChange={setRingSize} unit="US" />
+                  <ControlSlider label="Band Thickness" value={bandThickness} min={1.2} max={4.0} step={0.1} onChange={setBandThickness} unit="mm" />
+                  <ControlSlider label="Gem Relief Height (0 = Flush)" value={gemRelief} min={0.0} max={3.5} step={0.1} onChange={setGemRelief} unit="mm" />
+                  <ControlSlider label="Carved Socket Depth" value={pocketDepthInput} min={0.2} max={1.5} step={0.05} onChange={setPocketDepthInput} unit="mm" />
+
+                  <div className="bg-gray-50 p-2.5 border border-gray-200 rounded-lg mt-0.5 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="unique-stone-3d"
+                          checked={uniqueStone3D}
+                          onChange={(e) => setUniqueStone3D(e.target.checked)}
+                          className="w-3.5 h-3.5 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <label htmlFor="unique-stone-3d" className="text-xs font-bold text-gray-700 cursor-pointer select-none">
+                          Unique stone heights and depths
+                        </label>
+                      </div>
+                      {uniqueStone3D && (
+                        <button
+                          onClick={() => setStones(prev => prev.map(s => ({ ...s, reliefOverride: '', pocketDepthOverride: '' })))}
+                          className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800 underline"
+                        >
+                          Reset All
+                        </button>
+                      )}
+                    </div>
+
+                    {uniqueStone3D && (
+                      <div className="flex gap-2 overflow-x-auto pb-1.5 pt-0.5" style={{ scrollbarWidth: 'thin' }}>
+                        {effectiveStones.map((stone, sIdx) => {
+                          const isStoneLinked = !!stones[sIdx]?.linkedTo;
+                          return (
+                            <div
+                              key={stone.id}
+                              className={`flex flex-col gap-1.5 shrink-0 bg-white p-2 border rounded-md shadow-sm min-w-[104px] ${
+                                isStoneLinked ? 'border-emerald-200 bg-emerald-50/20 opacity-80' : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 border-b border-gray-100 pb-1">
+                                <span className="text-[10px] font-bold text-gray-700 flex items-center gap-1">
+                                  <span
+                                    className="w-2 h-2 rounded-full border border-gray-300 shrink-0"
+                                    style={{ backgroundColor: stone.color }}
+                                  />
+                                  Stone #{sIdx + 1}
+                                </span>
+                                {isStoneLinked && (
+                                  <span className="text-[8px] font-bold text-emerald-600 uppercase">Linked</span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">Height (Relief)</span>
+                                <select
+                                  disabled={isStoneLinked}
+                                  value={stone.reliefOverride === undefined || stone.reliefOverride === null ? '' : stone.reliefOverride}
+                                  onChange={(e) => updateStone(sIdx, {
+                                    reliefOverride: e.target.value === '' ? '' : Number(e.target.value)
+                                  })}
+                                  className="w-full text-[10px] border border-gray-200 rounded py-0.5 px-1 outline-none bg-gray-50 font-mono text-gray-700 focus:border-emerald-500 disabled:opacity-60"
+                                >
+                                  <option value="">(Global {gemRelief.toFixed(1)})</option>
+                                  {RELIEF_HEIGHT_OPTIONS.map((val) => (
+                                    <option key={`rel-${val}`} value={val}>
+                                      {val === 0 ? '0.0mm (Flush)' : `${val.toFixed(1)}mm`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">Socket Depth</span>
+                                <select
+                                  disabled={isStoneLinked}
+                                  value={stone.pocketDepthOverride === undefined || stone.pocketDepthOverride === null ? '' : stone.pocketDepthOverride}
+                                  onChange={(e) => updateStone(sIdx, {
+                                    pocketDepthOverride: e.target.value === '' ? '' : Number(e.target.value)
+                                  })}
+                                  className="w-full text-[10px] border border-gray-200 rounded py-0.5 px-1 outline-none bg-gray-50 font-mono text-gray-700 focus:border-emerald-500 disabled:opacity-60"
+                                >
+                                  <option value="">(Global {pocketDepthInput.toFixed(2)})</option>
+                                  {SOCKET_DEPTH_OPTIONS.map((val) => (
+                                    <option key={`dep-${val}`} value={val}>
+                                      {val.toFixed(2)}mm
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <label className="text-sm font-semibold text-gray-600 border-b border-gray-200 pb-1">
+                    Slicer &amp; Multi-Part Export
+                  </label>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Band Cutout Mode</span>
+                    <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-md border border-gray-200">
+                      {[
+                        { id: 'pocket_and_gem', label: 'Pocket + Gem' },
+                        { id: 'sockets_only', label: 'Empty Sockets' },
+                        { id: 'solid_band', label: 'Solid Band' }
+                      ].map(mode => (
+                        <button
+                          key={mode.id}
+                          onClick={() => setCutoutMode(mode.id)}
+                          className={`py-1.5 px-1.5 rounded text-[10px] font-bold transition-all ${
+                            cutoutMode === mode.id
+                              ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                              : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 flex flex-col gap-2">
+                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
+                      <input
+                        type="checkbox"
+                        checked={include3DSettings}
+                        onChange={e => setInclude3DSettings(e.target.checked)}
+                        className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                      Include Separate 3D Prongs/Bezels
+                    </label>
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                      <strong>100% Welded Manifold:</strong> In OrcaSlicer, Bambu Studio, or Anycubic Slicer, <em>Split to Parts</em> gives <strong>1 solid Ring Band with carved sockets</strong> + <strong>{stones.length} Gem(s)</strong> + shape-fitted 3D Bezels/V-Prongs.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    <button
+                      onClick={handleExport3MF}
+                      className="py-2 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                    >
+                      <PackageCheck className="w-4 h-4" />
+                      Export 3D 3MF
+                    </button>
+                    <button
+                      onClick={handleExportSTL}
+                      className="py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Export 3D STL
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
+              <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-emerald-500" />
+                Individual Stones Configurator
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {effectiveStones.map((stone, index) => {
+                const isLinked = !!stones[index].linkedTo;
+                const haloData = stone.settingStyle === 'Halo' ? getHaloData(stone.shape, stone.width/2, (stone.width*(SHAPE_RATIOS[stone.shape]||1))/2, stone.haloSize||1.0) : null;
+
+                return (
+                  <div key={stone.id} className="flex flex-col gap-1.5 relative">
+                    <div className="flex justify-between items-center px-1">
+                      <span className="font-bold text-gray-700 text-sm flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full shadow-inner border border-gray-300" style={{ backgroundColor: stone.color }} />
+                        Stone {index + 1} {index === 0 && layoutMode === 'cluster' && <span className="text-gray-400 font-normal ml-0.5">(Anchor)</span>}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        {index > 0 && (
+                          <div className="flex items-center gap-1">
+                            <LinkIcon className={`w-3.5 h-3.5 ${isLinked ? 'text-emerald-500' : 'text-gray-400'}`} />
+                            <select
+                              value={stones[index].linkedTo || ''}
+                              onChange={(e) => updateStone(index, { linkedTo: e.target.value ? Number(e.target.value) : null })}
+                              className={`text-[10px] font-semibold rounded py-0.5 px-1 outline-none transition-colors cursor-pointer border ${
+                                isLinked ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-500'
+                              }`}
+                            >
+                              <option value="">No Link</option>
+                              {stones.filter(s => s.id !== stone.id).map((s) => {
+                                const sIndex = stones.findIndex(st => st.id === s.id);
+                                return <option key={s.id} value={s.id}>Mirror Stone {sIndex + 1}</option>;
+                              })}
+                            </select>
+                          </div>
+                        )}
+
+                        {stones.length > 1 && (
+                          <button
+                            onClick={() => removeSpecificStone(stone.id)}
+                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded px-2 py-0.5 text-xs font-semibold flex items-center gap-1 transition-colors"
+                          >
+                            <X className="w-3 h-3" /> Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={`bg-white rounded-xl p-4 shadow-sm border transition-all flex flex-col gap-4 relative overflow-hidden ${isLinked ? 'border-emerald-200 bg-emerald-50/10' : 'border-gray-200 hover:border-emerald-300'}`}>
+                      {isLinked && (
+                        <div className="absolute inset-0 bg-gray-50/40 z-10 pointer-events-none" />
+                      )}
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Shape</span>
+                          <select
+                            disabled={isLinked}
+                            value={stone.shape || 'Round Brilliant'}
+                            onChange={(e) => updateStone(index, { shape: e.target.value })}
+                            className="w-full text-[11px] border border-gray-200 rounded text-gray-700 py-1.5 px-1 bg-gray-50 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-75 disabled:bg-gray-100"
+                          >
+                            {Object.keys(SHAPE_RATIOS).map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Mode</span>
+                          <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[28px] ${isLinked ? 'opacity-75' : ''}`}>
+                            <button
+                              disabled={isLinked}
+                              className={`flex-1 text-[9px] font-bold rounded uppercase transition-colors ${stone.colorMode === 'preset' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              onClick={() => updateStone(index, { colorMode: 'preset' })}
+                            >
+                              STONE
+                            </button>
+                            <button
+                              disabled={isLinked}
+                              className={`flex-1 text-[9px] font-bold rounded uppercase transition-colors ${stone.colorMode === 'custom' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              onClick={() => updateStone(index, { colorMode: 'custom' })}
+                            >
+                              COLOR
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide truncate">
+                            {stone.colorMode === 'preset' ? 'Gemstone' : 'Custom'}
+                          </span>
+                          {stone.colorMode === 'preset' ? (
+                            <select
+                              disabled={isLinked}
+                              value={stone.preset || 'Diamond'}
+                              onChange={(e) => updateStone(index, { preset: e.target.value, color: PRESET_STONES[e.target.value] })}
+                              className="w-full text-[11px] border border-gray-200 rounded text-gray-700 py-1.5 px-1 bg-gray-50 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-75 disabled:bg-gray-100"
+                            >
+                              {Object.keys(PRESET_STONES).map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                          ) : (
+                            <div className={`flex items-center gap-2 w-full border border-gray-200 rounded bg-gray-50 p-1 h-[28px] ${isLinked ? 'opacity-75' : ''}`}>
+                              <input
+                                type="color" value={stone.color} disabled={isLinked}
+                                onChange={(e) => updateStone(index, { color: e.target.value })}
+                                className="w-5 h-5 p-0 border border-gray-300 rounded cursor-pointer shrink-0 bg-transparent disabled:cursor-not-allowed"
+                              />
+                              <span className="text-[10px] font-mono font-semibold text-gray-600 uppercase truncate">{stone.color}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={`grid ${stone.settingStyle === 'Bezel' ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
+                        <div className="flex flex-col gap-1.5 justify-center">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                            <Crown className="w-3 h-3" /> Setting Style
+                          </span>
+                          <select
+                            disabled={isLinked}
+                            value={stone.settingStyle || '4-Prong'}
+                            onChange={(e) => updateStone(index, { settingStyle: e.target.value })}
+                            className="w-full text-xs border border-gray-200 rounded text-gray-700 py-1.5 px-2 bg-gray-50 focus:ring-1 focus:ring-emerald-500 outline-none h-[28px] disabled:opacity-75 disabled:bg-gray-100"
+                          >
+                            {SETTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+
+                        {stone.settingStyle === 'Bezel' && (
+                          <>
+                            <div className="flex flex-col gap-1.5 justify-center">
+                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Bezel Color</span>
+                              <select
+                                disabled={isLinked}
+                                value={stone.bezelColor || 'gold'}
+                                onChange={(e) => updateStone(index, { bezelColor: e.target.value })}
+                                className="w-full text-xs border border-gray-200 rounded text-gray-700 py-1.5 px-2 bg-gray-50 focus:ring-1 focus:ring-emerald-500 outline-none h-[28px] disabled:opacity-75 disabled:bg-gray-100"
+                              >
+                                <option value="gold">Gold</option>
+                                <option value="silver">Silver</option>
+                                <option value="black">Black</option>
+                              </select>
+                            </div>
+                            <div className="flex flex-col justify-center translate-y-1">
+                              <CompactControl
+                                label="Bezel Size"
+                                value={stone.bezelSize || 0.5}
+                                min={0.1} max={2.0} step={0.1}
+                                disabled={isLinked}
+                                onChange={(v) => updateStone(index, { bezelSize: v })}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {stone.settingStyle === 'Halo' && (
+                        <div className="col-span-full bg-gray-50 p-3 border border-gray-200 rounded mt-1">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2 block">Halo Configuration</span>
+
+                          <div className="grid grid-cols-2 gap-4 mb-3">
+                            <CompactControl label="Halo Stone Size" value={stone.haloSize || 1.0} min={0.5} max={3.0} step={0.1} disabled={isLinked} onChange={(v) => updateStone(index, { haloSize: v })} />
+
+                            <div className="flex flex-col gap-1.5">
+                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Base Halo Color</span>
+                              <select
+                                disabled={isLinked}
+                                value={stone.haloPreset || 'Diamond'}
+                                onChange={(e) => updateStone(index, { haloPreset: e.target.value, haloColor: PRESET_STONES[e.target.value] })}
+                                className="w-full text-[11px] border border-gray-200 rounded text-gray-700 py-1.5 px-1 bg-white focus:ring-1 focus:ring-emerald-500 outline-none h-[28px]"
+                              >
+                                {Object.keys(PRESET_STONES).map(p => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 mb-2">
+                            <input
+                              type="checkbox"
+                              id={`unique-${index}`}
+                              disabled={isLinked}
+                              checked={stone.haloUniqueStones || false}
+                              onChange={e => updateStone(index, { haloUniqueStones: e.target.checked })}
+                              className="w-3.5 h-3.5 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <label htmlFor={`unique-${index}`} className="text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                              Unique stones in halo
+                            </label>
+                          </div>
+
+                          {stone.haloUniqueStones && haloData && (
+                            <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+                              {haloData.stones.map((_, hIdx) => (
+                                <div key={hIdx} className="flex flex-col gap-1 shrink-0 bg-white p-1.5 border rounded items-center shadow-sm">
+                                  <span className="text-[9px] font-bold text-gray-400">#{hIdx+1}</span>
+                                  <select
+                                    className="w-[70px] text-[10px] border border-gray-200 rounded py-0.5 outline-none bg-gray-50"
+                                    disabled={isLinked}
+                                    value={stone.haloOverrides?.[hIdx] || ''}
+                                    onChange={(e) => {
+                                      const newOverrides = { ...(stone.haloOverrides || {}) };
+                                      if (e.target.value === '') delete newOverrides[hIdx];
+                                      else newOverrides[hIdx] = e.target.value;
+                                      updateStone(index, { haloOverrides: newOverrides });
+                                    }}
+                                  >
+                                    <option value="">(Base Color)</option>
+                                    {Object.keys(PRESET_STONES).map(p => <option key={p} value={PRESET_STONES[p]}>{p}</option>)}
+                                  </select>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-3 pt-2">
+                        <CompactControl label="Width" value={stone.width} min={1} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { width: v })} />
+                        <CompactControl label="Y-Offset" value={stone.heightOffset} min={-15} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { heightOffset: v })} />
+                        <CompactControl label="Rot (deg)" value={stone.rotation} min={0} max={360} step={1} disabled={isLinked} onChange={(v) => updateStone(index, { rotation: v })} />
+                      </div>
+
+                      <div className="pt-2 border-t border-gray-100 mt-2">
+                        {layoutMode === 'scatter' ? (
+                          <CompactControl label={index === 0 ? "Locked (Anchor)" : "Dist. From Neighbor"} value={index === 0 ? 0 : stone.gap} min={-10} max={15} step={0.25} disabled={index === 0 || isLinked} onChange={(v) => updateStone(index, { gap: v })} />
+                        ) : (
+                          index === 0 ? (
+                            <div className="w-full text-center py-2 bg-gray-50 rounded border border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wide">
+                              Center Anchor (Locked)
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Side</span>
+                                <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[26px] ${isLinked ? 'opacity-75' : ''}`}>
+                                  <button
+                                    disabled={isLinked}
+                                    className={`flex-1 text-[10px] font-bold rounded uppercase transition-colors ${stone.side === 'left' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                    onClick={() => updateStone(index, { side: 'left' })}
+                                  >Left</button>
+                                  <button
+                                    disabled={isLinked}
+                                    className={`flex-1 text-[10px] font-bold rounded uppercase transition-colors ${stone.side === 'right' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                    onClick={() => updateStone(index, { side: 'right' })}
+                                  >Right</button>
+                                </div>
+                              </div>
+                              <CompactControl label="Dist From Center" value={stone.centerOffset} min={0} max={30} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { centerOffset: v })} />
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button
+                onClick={addStone}
+                className="flex flex-col items-center justify-center min-h-[320px] bg-white/60 hover:bg-white border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-xl p-6 text-emerald-600 hover:text-emerald-700 transition-all shadow-sm hover:shadow group cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-full bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center transition-colors mb-3">
+                  <Plus className="w-6 h-6" />
+                </div>
+                <span className="font-bold text-base">Add Stone</span>
+                <span className="text-xs text-gray-400 mt-1">Append new gemstone to ring</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
+
+</body></html>
