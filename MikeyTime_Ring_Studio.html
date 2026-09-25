@@ -427,6 +427,68 @@ const pointsToSVGPath = (pts) => {
   return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(4)} ${p.y.toFixed(4)}`).join(' ') + ' Z';
 };
 
+// Facet lines for the 2D blueprint, built from the same outline the 3D model
+// uses so every cut's facets stay inside its own edge. Scaling is about the
+// outline's own center, not the drawing origin (a pear or heart isn't
+// centered on its origin).
+//   brilliant: table polygon + main facets (table corner -> girdle) + star
+//              facets (girdle midpoint -> neighbouring table corners)
+//   step:      nested outlines + corner lines through the actual cut corners
+//   crescent:  bands that follow the crescent's curve (its center lies
+//              outside its body, so scaling toward a center can't work)
+const STEP_CUT_SHAPES = ['Emerald', 'Asscher', 'Hexagon'];
+const getFacetGeometry = (shape, hw, hh) => {
+  const outline = getShapeOutlinePoints(shape, hw, hh, 96);
+  const n = outline.length;
+
+  if (shape === 'Crescent Moon') {
+    // First half of the outline is the outer arc (tip to tip), second half
+    // the inner arc back again; pair them up and pull each toward the other.
+    const half = Math.floor(n / 2);
+    const outer = outline.slice(0, half + 1);
+    const inner = outline.slice(half).concat([outline[0]]).reverse();
+    const band = (f) => {
+      const o = outer.map((p, i) => ({ x: p.x + (inner[i].x - p.x) * f, y: p.y + (inner[i].y - p.y) * f }));
+      const inn = inner.map((p, i) => ({ x: p.x + (outer[i].x - p.x) * f, y: p.y + (outer[i].y - p.y) * f }));
+      return o.concat(inn.slice().reverse());
+    };
+    const spokes = [0.2, 0.35, 0.5, 0.65, 0.8].map(t => {
+      const i = Math.round(t * half);
+      return [outer[i], inner[i]];
+    });
+    return { girdle: band(0.08), rings: [band(0.24)], table: band(0.38), lines: spokes };
+  }
+
+  const cx = outline.reduce((acc, p) => acc + p.x, 0) / n;
+  const cy = outline.reduce((acc, p) => acc + p.y, 0) / n;
+  const scalePt = (p, k) => ({ x: cx + (p.x - cx) * k, y: cy + (p.y - cy) * k });
+  const scaleAt = (i, k) => scalePt(outline[((i % n) + n) % n], k);
+  const scaled = (k) => outline.map(p => scalePt(p, k));
+
+  if (STEP_CUT_SHAPES.includes(shape)) {
+    const tableK = shape === 'Hexagon' ? 0.6 : 0.4;
+    const steps = shape === 'Hexagon' ? [] : [0.8, 0.6];
+    const corners = outline.map((p, i) => (p.isCorner ? i : -1)).filter(i => i >= 0);
+    return {
+      girdle: scaled(0.94),
+      rings: steps.map(k => scaled(k)),
+      table: scaled(tableK),
+      lines: corners.map(i => [scaleAt(i, 0.94), scaleAt(i, tableK)])
+    };
+  }
+
+  const K = 8;
+  const anchors = Array.from({ length: K }, (_, k) => Math.round((k * n) / K));
+  const table = anchors.map(i => scaleAt(i, 0.52));
+  const lines = [];
+  anchors.forEach((i, k) => {
+    lines.push([table[k], scaleAt(i, 0.94)]);
+    const star = scaleAt(Math.round(i + n / (2 * K)), 0.94);
+    lines.push([table[k], star], [table[(k + 1) % K], star]);
+  });
+  return { girdle: scaled(0.94), rings: [], table, lines };
+};
+
 const getHaloData = (shape, hw, hh, haloSize) => {
   const pts = getShapeOutlinePoints(shape, hw, hh, 120);
   const offset = (haloSize / 2) + 0.15;
@@ -485,8 +547,8 @@ const getProngPositions = (style, shape, hw, hh) => {
     }
     if (shape === 'Crescent Moon') {
       return [
-        { x: -hw * 0.2, y: -hh * 0.9 }, { x: -hw * 0.2, y: hh * 0.9 }, { x: hw * 0.4, y: -hh * 0.5 },
-        { x: hw * 0.4, y: hh * 0.5 }, { x: -hw * 0.15, y: 0 }, { x: hw * 0.65, y: 0 }
+        { x: -hw * 0.2, y: -hh * 0.9 }, { x: -hw * 0.2, y: hh * 0.9 }, { x: hw * 0.62, y: -hh * 0.5 },
+        { x: hw * 0.62, y: hh * 0.5 }, { x: hw * 0.25, y: 0 }, { x: hw * 0.72, y: 0 }
       ];
     }
     if (shape === 'Hexagon') {
@@ -759,6 +821,13 @@ const build3DRingShells = ({
     };
   };
 
+  // How far a prong's foot must slide across the band so a prong whose tip
+  // sits past the band edge still plants its foot on the band (it leans in).
+  const footOffsetV = (v, footRadius) => {
+    const limit = Math.max(0, halfW - footRadius - 0.1);
+    return Math.max(-limit, Math.min(limit, v)) - v;
+  };
+
   const preparedStones = renderedStones.map((stone) => {
     const w = Number(stone.width) || 4;
     const shape = stone.shape || 'Round Brilliant';
@@ -799,14 +868,35 @@ const build3DRingShells = ({
       };
     };
 
-    const cutContourUV = outlinePts.map(pt => toWorldUV(pt, pocketCutScale));
+    // A stone wider than the band can't have a socket cut at full size: it
+    // would take the band's whole width and leave paper-thin rims. Instead the
+    // socket keeps the stone's own outline, shrunk about the stone's center
+    // until a solid rim remains on both sides of the band. The stone's
+    // pavilion narrows to match below the band surface (see seatScale).
+    const rimMin = Math.max(0.35, bw * 0.1);
+    const seatHalfV = halfW - rimMin;
+    let cutScale = pocketCutScale;
+    outlinePts.forEach((pt) => {
+      const dv = pt.x * sinR + pt.y * cosR;
+      if (dv > 1e-6) cutScale = Math.min(cutScale, (seatHalfV - stone.y) / dv);
+      else if (dv < -1e-6) cutScale = Math.min(cutScale, (-seatHalfV - stone.y) / dv);
+    });
+    const hasSocket = cutScale >= 0.25;
+    if (!hasSocket) cutScale = 0.25;
+    const isNarrowSeat = cutScale < pocketCutScale - 1e-6;
+    const seatScale = isNarrowSeat ? Math.min(1, (cutScale / pocketCutScale) * 0.985) : 1;
+
+    const cutContourUV = outlinePts.map(pt => toWorldUV(pt, cutScale));
     const cornerUVs = cutContourUV.filter(pt => pt.isCorner);
 
     return {
       ...stone,
       w, h, hw, hh, rot,
       cosR, sinR,
-      maxRadius: Math.max(hw, hh) * pocketCutScale + 0.45,
+      maxRadius: Math.max(hw, hh) * cutScale + 0.45,
+      hasSocket,
+      isNarrowSeat,
+      seatScale,
       outlinePts,
       cutContourUV,
       cornerUVs,
@@ -828,6 +918,7 @@ const build3DRingShells = ({
     let closestStone = null;
     for (let i = 0; i < preparedStones.length; i++) {
       const st = preparedStones[i];
+      if (!st.hasSocket) continue;
       const dx = u - st.x, dy = v - st.y;
       const boundD = Math.sqrt(dx * dx + dy * dy) - st.maxRadius;
       if (boundD > minD) continue;
@@ -837,13 +928,18 @@ const build3DRingShells = ({
         closestStone = st;
       }
     }
-    return { d: Math.max(minD, -rimDist), stone: closestStone };
+    return { d: Math.max(Number.isFinite(minD) ? minD : 10, -rimDist), stone: closestStone };
   };
 
   const shells = [];
 
   const bandTris = [];
+  const samePoint = (a, b) => Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9 && Math.abs(a.z - b.z) < 1e-9;
   const pushBandTri = (p1, p2, p3, shadeTag = 'band') => {
+    // Grid points snapped onto a socket contour can coincide with an edge
+    // crossing; the zero-area triangles that produces would double up edges
+    // and break the watertight mesh, so they are dropped.
+    if (samePoint(p1, p2) || samePoint(p2, p3) || samePoint(p1, p3)) return;
     bandTris.push({
       v1: p1,
       v2: p2,
@@ -1075,6 +1171,11 @@ const build3DRingShells = ({
   // stone they hold rather than each tilting to its own spot on the band.
   // opts.wrapRoot: seat the root layer on the curved band (wrapPoint) so a
   // prong's foot stays planted in the metal wherever the band falls away.
+  // opts.rootOffsetV: slide the root layer across the band (a prong whose tip
+  // is past the band edge leans in so its foot still lands on the band).
+  // opts.rootScale + opts.seatR: narrow the root layer, and add a matching
+  // seat layer at seatR, so a stone wider than the band tapers into its
+  // narrowed socket and only reaches full width above the band surface.
   const buildFacetedCrownShell = (pts2D, centerU, centerV, rotDeg, rRoot, rGirdle, rTable, tableScale, opts = {}) => {
     const rad = (rotDeg * Math.PI) / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
@@ -1093,27 +1194,39 @@ const build3DRingShells = ({
       };
     };
 
+    const rootScale = opts.rootScale ?? 1;
+    const rootOffsetV = opts.rootOffsetV ?? 0;
+    const hasSeat = opts.seatR !== undefined && opts.seatR !== null;
+
     const bottomRing = [];
+    const seatRing = [];
     const girdleRing = [];
     const tableRing = [];
 
     for (let i = 0; i < n; i++) {
       const pFull = transform2D(pts2D[i], 1.0);
+      const pRoot = transform2D(pts2D[i], rootScale);
       const pTable = transform2D(pts2D[i], tableScale);
-      bottomRing.push(placeRoot(pFull.u, pFull.v, rRoot));
+      bottomRing.push(placeRoot(pRoot.u, pRoot.v + rootOffsetV, rRoot));
+      if (hasSeat) seatRing.push(placeFlat(frame, pRoot.u, pRoot.v, opts.seatR));
       girdleRing.push(placeFlat(frame, pFull.u, pFull.v, rGirdle));
       tableRing.push(placeFlat(frame, pTable.u, pTable.v, rTable));
     }
 
-    const bottomCenter = placeRoot(centerU, centerV, rRoot);
+    const bottomCenter = placeRoot(centerU, centerV + rootOffsetV, rRoot);
     const topCenter = placeFlat(frame, centerU, centerV, rTable);
+    const lowerRing = hasSeat ? seatRing : bottomRing;
     const tris = [];
 
     for (let i = 0; i < n; i++) {
       const next = (i + 1) % n;
       tris.push([bottomCenter, bottomRing[i], bottomRing[next]]);
-      tris.push([bottomRing[i], girdleRing[i], girdleRing[next]]);
-      tris.push([bottomRing[i], girdleRing[next], bottomRing[next]]);
+      if (hasSeat) {
+        tris.push([bottomRing[i], seatRing[i], seatRing[next]]);
+        tris.push([bottomRing[i], seatRing[next], bottomRing[next]]);
+      }
+      tris.push([lowerRing[i], girdleRing[i], girdleRing[next]]);
+      tris.push([lowerRing[i], girdleRing[next], lowerRing[next]]);
       tris.push([girdleRing[i], tableRing[i], tableRing[next]]);
       tris.push([girdleRing[i], tableRing[next], girdleRing[next]]);
       tris.push([topCenter, tableRing[next], tableRing[i]]);
@@ -1179,11 +1292,15 @@ const build3DRingShells = ({
       const uvOutGirdle = toUV(outerGirdlePts2D[i]);
       const uvOutSkirt = toUV(outerSkirtPts2D[i]);
 
-      const baseRootV = clampRootToBandV(uvOutSkirt.v, 0.78);
-      const inRootV = clampRootToBandV(uvSeatIn.v, 0.78);
+      // Root rings are pulled fully onto the band, and the seat ring stops at
+      // the band edge, so a bezel wider than the band tucks in under itself
+      // instead of hanging below the band surface off its sides.
+      const baseRootV = clampRootToBandV(uvOutSkirt.v, 1);
+      const inRootV = clampRootToBandV(uvSeatIn.v, 1);
+      const seatV = Math.max(-halfW, Math.min(halfW, uvOutSkirt.v));
 
       outRootRing.push(wrapPoint(uvOutSkirt.u, baseRootV, rRoot));
-      outSeatRing.push(wrapPoint(uvOutSkirt.u, uvOutSkirt.v, rBandSeat));
+      outSeatRing.push(wrapPoint(uvOutSkirt.u, seatV, rBandSeat));
       outGirdleRing.push(placeFlat(frame, uvOutGirdle.u, uvOutGirdle.v, rGirdle));
       outTopRing.push(placeFlat(frame, uvOutTop.u, uvOutTop.v, rTopOuter));
       inLipRing.push(placeFlat(frame, uvLipIn.u, uvLipIn.v, rTopLip));
@@ -1358,6 +1475,8 @@ const build3DRingShells = ({
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
     const n = pts2D.length;
     const frame = makeFlatFrame(centerU, centerV);
+    // Bottom stays on the band even when the halo is wider than the band.
+    const clampToBandV = (v) => Math.max(-(halfW - 0.05), Math.min(halfW - 0.05, v));
 
     const transformPt2D = (pt) => ({
       u: centerU + (pt.x * cosR - pt.y * sinR),
@@ -1368,9 +1487,9 @@ const build3DRingShells = ({
     for (let i = 0; i < n; i++) {
       const pIn = transformPt2D(innerPts2D[i]);
       const pOut = transformPt2D(outerPts2D[i]);
-      inBot.push(wrapPoint(pIn.u, pIn.v, rRoot));
+      inBot.push(wrapPoint(pIn.u, clampToBandV(pIn.v), rRoot));
       inTop.push(placeFlat(frame, pIn.u, pIn.v, rTop));
-      outBot.push(wrapPoint(pOut.u, pOut.v, rRoot));
+      outBot.push(wrapPoint(pOut.u, clampToBandV(pOut.v), rRoot));
       outTop.push(placeFlat(frame, pOut.u, pOut.v, rTop));
     }
 
@@ -1393,14 +1512,26 @@ const build3DRingShells = ({
         ? (stoneRFloor + 0.015)
         : (outerRadius - 0.45);
 
-      const rTable = isFlushStone
+      let rTable = isFlushStone
         ? (outerRadius + 0.03)
         : (outerRadius + effectiveRelief);
-      const rGirdle = isFlushStone
+      let rGirdle = isFlushStone
         ? (outerRadius - stonePocketDepth * 0.35)
         : (outerRadius + effectiveRelief * 0.55);
 
-      const gemTris = buildFacetedCrownShell(pts, stone.x, stone.y, rot, rRoot, rGirdle, rTable, isFlushStone ? 0.78 : 0.64);
+      // Wider than the band: the pavilion narrows into the socket and the
+      // stone only reaches full width just above the band surface. A flush
+      // stone can't sit below a surface narrower than itself, so it rides
+      // just above the band instead.
+      let gemOpts = {};
+      if (stone.isNarrowSeat) {
+        const seatR = outerRadius + 0.02;
+        rGirdle = Math.max(rGirdle, seatR + 0.12);
+        rTable = Math.max(rTable, rGirdle + 0.2);
+        gemOpts = { rootScale: stone.seatScale, seatR };
+      }
+
+      const gemTris = buildFacetedCrownShell(pts, stone.x, stone.y, rot, rRoot, rGirdle, rTable, isFlushStone ? 0.78 : 0.64, gemOpts);
       shells.push({
         name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_${shape.replace(/\s+/g, '')}`,
         role: `Stone ${idx + 1} (${stone.colorMode === 'preset' ? stone.preset : 'Custom'})`,
@@ -1445,7 +1576,7 @@ const build3DRingShells = ({
               const pTris = buildFacetedCrownShell(
                 prongOutline, pu, pv, 0,
                 prongRoot, outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.08, 0.7,
-                { frameU: stone.x, frameV: stone.y, wrapRoot: true }
+                { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: footOffsetV(pv, pRadius) }
               );
               allVProngTris.push(...pTris);
             });
@@ -1474,7 +1605,7 @@ const build3DRingShells = ({
             const pTris = buildFacetedCrownShell(
               prongOutline, pu, pv, 0,
               Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.12, 0.7,
-              { frameU: stone.x, frameV: stone.y, wrapRoot: true }
+              { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: footOffsetV(pv, pRadius) }
             );
             allProngTris.push(...pTris);
           });
@@ -1738,6 +1869,50 @@ const generate3MFBlob = (shells, bandWidth = 4) => {
   return new Blob([zipBuf], { type: 'model/3mf' });
 };
 
+// Exploded view: every part moves as one rigid piece, outward along its
+// stone's direction from the ring's center. Offsets come from the parts' real
+// radial extents so nothing overlaps: a stone's metal (prongs, bezel, halo
+// base) lifts until its lowest point clears the band, and the stone (and any
+// halo gems) lifts until it clears the top of that metal, each with a gap.
+const computeExplodeShifts = (shells, amount) => {
+  const shifts = shells.map(() => null);
+  if (!amount || shells.length < 2) return shifts;
+  const GAP = 1.2;
+  const radial = (p) => Math.hypot(p.x, p.z);
+  const info = shells.map((shell) => {
+    let minR = Infinity, maxR = -Infinity, sx = 0, sz = 0;
+    shell.triangles.forEach((t) => {
+      [t.v1, t.v2, t.v3].forEach((p) => {
+        const r = radial(p);
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        sx += p.x; sz += p.z;
+      });
+    });
+    const m = /Stone_(\d+)_/.exec(shell.name || '');
+    return { minR, maxR, sx, sz, group: m ? m[1] : null };
+  });
+  const bandTop = info[0].maxR;
+  const groups = {};
+  info.forEach((it, i) => {
+    if (i === 0 || it.group === null) return;
+    (groups[it.group] = groups[it.group] || []).push(i);
+  });
+  Object.values(groups).forEach((idxs) => {
+    const gem = idxs.find(i => !shells[i].isMetal) ?? idxs[0];
+    const dLen = Math.hypot(info[gem].sx, info[gem].sz) || 1;
+    const dir = { x: info[gem].sx / dLen, z: info[gem].sz / dLen };
+    const metal = idxs.filter(i => shells[i].isMetal);
+    const metalLift = metal.length ? Math.max(0, ...metal.map(i => bandTop - info[i].minR)) + GAP : 0;
+    const metalTop = metal.length ? Math.max(...metal.map(i => info[i].maxR)) + metalLift : bandTop;
+    idxs.forEach((i) => {
+      const lift = shells[i].isMetal ? metalLift : Math.max(0, metalTop - info[i].minR) + GAP;
+      shifts[i] = { x: dir.x * lift * amount, z: dir.z * lift * amount };
+    });
+  });
+  return shifts;
+};
+
 const Ring3DPreviewCanvas = ({
   shells,
   externalCameraRequest,
@@ -1854,19 +2029,11 @@ const Ring3DPreviewCanvas = ({
     const lightDir2 = { x: -0.45, y: -0.25, z: 0.85 };
     const creaseLines = [];
 
+    const explodeShifts = computeExplodeShifts(shells, explodeParts);
+
     shells.forEach((shell, sIdx) => {
       const baseRGB = parseHexRGB(shell.color);
-      const radialOffset = sIdx === 0 ? 0 : explodeParts * (shell.isMetal ? 1.8 : 3.2);
-      let explodeShift = null;
-      if (radialOffset > 0 && shell.triangles.length > 0) {
-        let sumX = 0, sumZ = 0;
-        shell.triangles.forEach(t => {
-          sumX += t.v1.x + t.v2.x + t.v3.x;
-          sumZ += t.v1.z + t.v2.z + t.v3.z;
-        });
-        const cLen = Math.hypot(sumX, sumZ) || 1;
-        explodeShift = { x: (sumX / cLen) * radialOffset, z: (sumZ / cLen) * radialOffset };
-      }
+      const explodeShift = explodeShifts[sIdx];
 
       shell.triangles.forEach(tri => {
         let nx1 = tri.normal.x * cosY + tri.normal.z * sinY;
@@ -2413,12 +2580,12 @@ function App() {
 
       return (
         <g>
-          <path d={`M ${metalCenterLine} Z`} fill="none" stroke={bandFill} strokeWidth={hSize * 1.2} strokeLinejoin="round" filter={isFlatBand ? undefined : "url(#drop-shadow)"} />
+          <path d={`M ${metalCenterLine} Z`} fill="none" stroke={bandFill} strokeWidth={hSize * 1.2} strokeLinejoin="round" filter={isFlatBand ? undefined : "url(#part-shadow)"} />
           {hData.stones.map((p, i) => {
             const fill = stone.haloOverrides?.[i] || stone.haloColor || '#fbfbfb';
             return (
               <g key={i} transform={`translate(${p.x}, ${p.y})`}>
-                <circle cx="0" cy="0" r={r} fill={fill} filter={isFlatBand ? undefined : "url(#drop-shadow)"} />
+                <circle cx="0" cy="0" r={r} fill={fill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />
                 <circle cx="0" cy="0" r={r*0.7} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={r*0.1} />
                 <circle cx="0" cy="0" r={r*0.3} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={r*0.1} />
               </g>
@@ -2459,7 +2626,7 @@ function App() {
 
     if (style === '4-Prong' || style === '6-Prong') {
       const prongs = getProngPositions(style, shape, hw, hh);
-      return prongs.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#drop-shadow)"} />);
+      return prongs.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />);
     }
 
     if (style === 'V-Prong') {
@@ -2467,13 +2634,13 @@ function App() {
       const vProngSpec = getVProngData(shape, hw, hh);
       return (
         <g>
-          <g stroke={bandFill} strokeWidth={strokeW} fill="none" strokeLinejoin="miter" strokeLinecap="square" filter={isFlatBand ? undefined : "url(#drop-shadow)"}>
+          <g stroke={bandFill} strokeWidth={strokeW} fill="none" strokeLinejoin="miter" strokeLinecap="square" filter={isFlatBand ? undefined : "url(#part-shadow)"}>
             {vProngSpec.chevrons.map((c, i) => (
               <polyline key={`vchev-${i}`} points={`${c.a.x},${c.a.y} ${c.v.x},${c.v.y} ${c.b.x},${c.b.y}`} />
             ))}
           </g>
           {vProngSpec.roundProngs.map((p, i) => (
-            <circle key={`vrnd-${i}`} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#drop-shadow)"} />
+            <circle key={`vrnd-${i}`} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />
           ))}
         </g>
       );
@@ -2688,6 +2855,12 @@ function App() {
                 <filter id="drop-shadow" x="-30%" y="-30%" width="160%" height="160%">
                   <feDropShadow dx="0" dy="0.5" stdDeviation="0.5" floodOpacity="0.4" />
                 </filter>
+                {/* Prongs, halo stones and claws are tiny next to the 0.5mm
+                    blur above, so a +30% filter region clipped their shadow
+                    into a visible square. This one leaves room for the blur. */}
+                <filter id="part-shadow" x="-150%" y="-150%" width="400%" height="400%">
+                  <feDropShadow dx="0" dy="0.18" stdDeviation="0.16" floodOpacity="0.35" />
+                </filter>
               </defs>
 
               <rect x={-svgWidthMM/2} y={-svgHeightMM/2} width={svgWidthMM} height={svgHeightMM} fill="url(#largeGrid)" />
@@ -2721,7 +2894,6 @@ function App() {
                 const rotation = Number(stone.rotation) || 0;
 
                 const basePath = getShapePath(shape, hw, hh);
-                const isStep = shape === 'Emerald' || shape === 'Asscher';
                 const pSize = hw * 0.15;
 
                 return (
@@ -2732,48 +2904,21 @@ function App() {
                   >
                     <g transform={`rotate(${rotation})`}>
                       <path d={basePath} fill={stone.color} />
-                      <g stroke="rgba(255,255,255,0.5)" strokeWidth={hw * 0.04} fill="none">
-                        {isStep ? (
-                          <>
-                            <path d={getShapePath(shape, hw*0.75, hh*0.75)} fill="rgba(255,255,255,0.1)" />
-                            <path d={getShapePath(shape, hw*0.5, hh*0.5)} />
-                            <path d={getShapePath(shape, hw*0.25, hh*0.25)} />
-                            <line x1={-hw} y1={-hh} x2={0} y2={0} />
-                            <line x1={hw} y1={-hh} x2={0} y2={0} />
-                            <line x1={-hw} y1={hh} x2={0} y2={0} />
-                            <line x1={hw} y1={hh} x2={0} y2={0} />
-                          </>
-                        ) : shape === 'Heart' || shape === 'Crescent Moon' ? (
-                          <>
-                            <path d={getShapePath(shape, hw*0.8, hh*0.8)} strokeWidth={hw * 0.02} />
-                            <path d={getShapePath(shape, hw*0.5, hh*0.5)} strokeWidth={hw * 0.015} fill="rgba(255,255,255,0.1)" />
-                          </>
-                        ) : shape === 'Hexagon' ? (
-                          <>
-                            <path d={getShapePath('Hexagon', hw*0.6, hh*0.6)} fill="rgba(255,255,255,0.1)" strokeWidth={hw * 0.02} />
-                            <line x1={0} y1={-hh} x2={0} y2={-hh*0.6} />
-                            <line x1={hw*0.866} y1={-hh*0.5} x2={hw*0.52} y2={-hh*0.3} />
-                            <line x1={hw*0.866} y1={hh*0.5} x2={hw*0.52} y2={hh*0.3} />
-                            <line x1={0} y1={hh} x2={0} y2={hh*0.6} />
-                            <line x1={-hw*0.866} y1={hh*0.5} x2={-hw*0.52} y2={hh*0.3} />
-                            <line x1={-hw*0.866} y1={-hh*0.5} x2={-hw*0.52} y2={-hh*0.3} />
-                            <path d={getShapePath('Hexagon', hw*0.9, hh*0.9)} strokeWidth={hw * 0.02} />
-                          </>
-                        ) : (
-                          <>
-                            <polygon points={`${-hw*0.2},${-hh*0.5} ${hw*0.2},${-hh*0.5} ${hw*0.5},${-hh*0.2} ${hw*0.5},${hh*0.2} ${hw*0.2},${hh*0.5} ${-hw*0.2},${hh*0.5} ${-hw*0.5},${hh*0.2} ${-hw*0.5},${-hh*0.2}`} fill="rgba(255,255,255,0.15)" />
-                            <line x1={-hw*0.2} y1={-hh*0.5} x2={-hw*0.6} y2={-hh*0.6} />
-                            <line x1={hw*0.2} y1={-hh*0.5} x2={hw*0.6} y2={-hh*0.6} />
-                            <line x1={hw*0.5} y1={-hh*0.2} x2={hw*0.8} y2={0} />
-                            <line x1={hw*0.5} y1={hh*0.2} x2={hw*0.8} y2={0} />
-                            <line x1={hw*0.2} y1={hh*0.5} x2={hw*0.6} y2={hh*0.6} />
-                            <line x1={-hw*0.2} y1={hh*0.5} x2={-hw*0.6} y2={hh*0.6} />
-                            <line x1={-hw*0.5} y1={hh*0.2} x2={-hw*0.8} y2={0} />
-                            <line x1={-hw*0.5} y1={-hh*0.2} x2={-hw*0.8} y2={0} />
-                            <path d={getShapePath(shape, hw*0.9, hh*0.9)} strokeWidth={hw * 0.02} />
-                          </>
-                        )}
-                      </g>
+                      {(() => {
+                        const facets = getFacetGeometry(shape, hw, hh);
+                        const lineW = Math.min(hw, hh) * 0.025;
+                        return (
+                          <g stroke="rgba(255,255,255,0.5)" strokeWidth={lineW} fill="none" strokeLinejoin="round" clipPath={`url(#facet-clip-${stone.id})`}>
+                            <clipPath id={`facet-clip-${stone.id}`}><path d={basePath} /></clipPath>
+                            <path d={pointsToSVGPath(facets.girdle)} strokeWidth={lineW * 0.7} />
+                            {facets.rings.map((ring, i) => <path key={`ring-${i}`} d={pointsToSVGPath(ring)} />)}
+                            <path d={pointsToSVGPath(facets.table)} fill="rgba(255,255,255,0.12)" />
+                            {facets.lines.map(([p1, p2], i) => (
+                              <line key={`facet-${i}`} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />
+                            ))}
+                          </g>
+                        );
+                      })()}
                       {stone.settingStyle && stone.settingStyle !== 'None' && renderSetting(stone, hw, hh, pSize, basePath)}
                     </g>
 
@@ -2985,32 +3130,10 @@ function App() {
                     {bandColor}
                   </span>
                   <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">{bandWidth} mm band</span>
-                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md capitalize">{layoutMode} layout</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between md:justify-end gap-3" onClick={(e) => e.stopPropagation()}>
-                <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-                  <button
-                    onClick={() => setLayoutMode('cluster')}
-                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
-                      layoutMode === 'cluster' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    <CircleDot className="w-3.5 h-3.5" />
-                    Cluster Layout
-                  </button>
-                  <button
-                    onClick={() => setLayoutMode('scatter')}
-                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
-                      layoutMode === 'scatter' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    <AlignHorizontalJustifyCenter className="w-3.5 h-3.5" />
-                    Scatter Layout
-                  </button>
-                </div>
-
                 <button
                   onClick={() => setIsGlobalSettingsOpen(prev => !prev)}
                   className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 border border-gray-200 hover:border-emerald-200 px-2.5 py-1.5 rounded-lg transition-colors"
@@ -3325,12 +3448,37 @@ function App() {
           </section>
 
           <section>
-            <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4 border-b border-gray-200 pb-3">
               <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
                 <Settings className="w-5 h-5 text-emerald-600" />
                 Stones
                 <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">{stones.length}</span>
               </h2>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500">Layout</span>
+                <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button
+                    onClick={() => setLayoutMode('cluster')}
+                    title="Stone 1 is the center anchor; other stones are placed by side and distance from center"
+                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
+                      layoutMode === 'cluster' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    <CircleDot className="w-3.5 h-3.5" />
+                    Cluster
+                  </button>
+                  <button
+                    onClick={() => setLayoutMode('scatter')}
+                    title="Stones sit in a row, each spaced by its gap from the previous stone"
+                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
+                      layoutMode === 'scatter' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    <AlignHorizontalJustifyCenter className="w-3.5 h-3.5" />
+                    Scatter
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
