@@ -1,4 +1,3 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,8 +9,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <style>
-  :root { color-scheme: light; }
+  :root {
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   html, body { margin: 0; padding: 0; background: #f3f4f6; }
+  body { font: 14px -apple-system, BlinkMacSystemFont, sans-serif; color: #141413; }
+  img { max-width: 100%; }
+  [hidden]:not([hidden=until-found i]) { display: none !important; }
   #root { min-height: 100vh; }
 </style>
 </head>
@@ -1021,11 +1029,20 @@ const build3DRingShells = ({
   // shape's own (centerU, centerV) so the crown/girdle/root layers of a
   // round stone (or a prong tip) stay a true rigid rounded shape - never
   // bent to follow the band curvature underneath it.
-  const buildFacetedCrownShell = (pts2D, centerU, centerV, rotDeg, rRoot, rGirdle, rTable, tableScale) => {
+  //
+  // opts.frameU/frameV: build in another shape's flat frame instead of this
+  // shape's own - used so prongs and halo gems stay co-planar with the main
+  // stone they hold rather than each tilting to its own spot on the band.
+  // opts.wrapRoot: seat the root layer on the curved band (wrapPoint) so a
+  // prong's foot stays planted in the metal wherever the band falls away.
+  const buildFacetedCrownShell = (pts2D, centerU, centerV, rotDeg, rRoot, rGirdle, rTable, tableScale, opts = {}) => {
     const rad = (rotDeg * Math.PI) / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
     const n = pts2D.length;
-    const frame = makeFlatFrame(centerU, centerV);
+    const frame = makeFlatFrame(opts.frameU ?? centerU, opts.frameV ?? centerV);
+    const placeRoot = opts.wrapRoot
+      ? (u, v, h) => wrapPoint(u, v, h)
+      : (u, v, h) => placeFlat(frame, u, v, h);
 
     const transform2D = (pt, scale = 1) => {
       const sx = pt.x * scale;
@@ -1043,12 +1060,12 @@ const build3DRingShells = ({
     for (let i = 0; i < n; i++) {
       const pFull = transform2D(pts2D[i], 1.0);
       const pTable = transform2D(pts2D[i], tableScale);
-      bottomRing.push(placeFlat(frame, pFull.u, pFull.v, rRoot));
+      bottomRing.push(placeRoot(pFull.u, pFull.v, rRoot));
       girdleRing.push(placeFlat(frame, pFull.u, pFull.v, rGirdle));
       tableRing.push(placeFlat(frame, pTable.u, pTable.v, rTable));
     }
 
-    const bottomCenter = placeFlat(frame, centerU, centerV, rRoot);
+    const bottomCenter = placeRoot(centerU, centerV, rRoot);
     const topCenter = placeFlat(frame, centerU, centerV, rTable);
     const tris = [];
 
@@ -1065,15 +1082,20 @@ const build3DRingShells = ({
     return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'gem' }));
   };
 
-  // Bezel collar: kept on the cylindrical wrap (wrapPoint) on purpose - a
-  // bezel is a metal wall that follows the band's curve into the band rim,
-  // so it should bend with the ring, unlike the stone/prongs it holds.
+  // Bezel collar: a hybrid of both placements. The rings that meet the band
+  // (outer root/seat, inner root) follow the band's curve via wrapPoint so the
+  // collar stays welded to the shank. The rings that hold the stone (girdle,
+  // top, lip, inner girdle) sit in the stone's own flat frame, so the lip
+  // stays level with the flat gem all the way round. Fully wrapped, the lip
+  // dropped away from the gem along the ring's circumference and left the
+  // stone standing proud of its bezel there.
   const buildShapeSpecificBezelShell = (stone) => {
     const { shape, hw, hh, rot, x: centerU, y: centerV, outlinePts: pts2D, effectiveRelief, stoneRFloor } = stone;
     const bSize = Math.max(0.15, Number(stone.bezelSize) || 0.5);
     const rad = (rot * Math.PI) / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
     const n = pts2D.length;
+    const frame = makeFlatFrame(centerU, centerV);
 
     const toUV = (pt) => ({
       u: centerU + (pt.x * cosR - pt.y * sinR),
@@ -1122,10 +1144,10 @@ const build3DRingShells = ({
 
       outRootRing.push(wrapPoint(uvOutSkirt.u, baseRootV, rRoot));
       outSeatRing.push(wrapPoint(uvOutSkirt.u, uvOutSkirt.v, rBandSeat));
-      outGirdleRing.push(wrapPoint(uvOutGirdle.u, uvOutGirdle.v, rGirdle));
-      outTopRing.push(wrapPoint(uvOutTop.u, uvOutTop.v, rTopOuter));
-      inLipRing.push(wrapPoint(uvLipIn.u, uvLipIn.v, rTopLip));
-      inGirdleRing.push(wrapPoint(uvSeatIn.u, uvSeatIn.v, rInnerGirdle));
+      outGirdleRing.push(placeFlat(frame, uvOutGirdle.u, uvOutGirdle.v, rGirdle));
+      outTopRing.push(placeFlat(frame, uvOutTop.u, uvOutTop.v, rTopOuter));
+      inLipRing.push(placeFlat(frame, uvLipIn.u, uvLipIn.v, rTopLip));
+      inGirdleRing.push(placeFlat(frame, uvSeatIn.u, uvSeatIn.v, rInnerGirdle));
       inRootRing.push(wrapPoint(uvSeatIn.u, inRootV, rRoot));
     }
 
@@ -1151,7 +1173,9 @@ const build3DRingShells = ({
   // V-Prong chevron: uses ONE flat frame centered on the STONE's own center
   // (not each chevron's own corner) so all of a stone's V-shaped claws stay
   // rigidly co-planar with each other and with the gem they hold, instead of
-  // each tip bending away from center at its own angle.
+  // each tip bending away from center at its own angle. Only the foot (root
+  // ring) follows the band's curve, so claws at the ends of a long stone
+  // don't float above a band that has curved away beneath them.
   const build3DVProngChevron = (chevron, stone, rRoot, rGirdle, rTop) => {
     const { x: centerU, y: centerV, rot, hw, hh } = stone;
     const rad = (rot * Math.PI) / 180;
@@ -1252,7 +1276,8 @@ const build3DRingShells = ({
         ? uvR.v * 0.25 + Math.sign(uvR.v) * halfW * 0.95 * 0.75
         : uvR.v;
 
-      rootRing.push(placeFlat(frame, uvR.u, clampedRootV, rRoot));
+      // Foot follows the band's curve so it stays planted in the shank.
+      rootRing.push(wrapPoint(uvR.u, clampedRootV, rRoot));
       girdleRing.push(placeFlat(frame, uvG.u, uvG.v, rGirdle));
       topRing.push(placeFlat(frame, uvT.u, uvT.v, rTop));
     }
@@ -1284,12 +1309,15 @@ const build3DRingShells = ({
     return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'band' }));
   };
 
-  // Halo base collar: kept on the cylindrical wrap, same reasoning as the
-  // bezel - it's a metal ring that follows the band's curve.
+  // Halo base collar: same hybrid as the bezel - the bottom follows the
+  // band's curve so it stays seated on the shank, while the top deck sits in
+  // the center stone's flat frame so it stays level with that stone and
+  // gives the halo gems a flat bed all the way round.
   const buildHollowCollarShell = (pts2D, centerU, centerV, rotDeg, innerPts2D, outerPts2D, rRoot, rTop) => {
     const rad = (rotDeg * Math.PI) / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
     const n = pts2D.length;
+    const frame = makeFlatFrame(centerU, centerV);
 
     const transformPt2D = (pt) => ({
       u: centerU + (pt.x * cosR - pt.y * sinR),
@@ -1301,9 +1329,9 @@ const build3DRingShells = ({
       const pIn = transformPt2D(innerPts2D[i]);
       const pOut = transformPt2D(outerPts2D[i]);
       inBot.push(wrapPoint(pIn.u, pIn.v, rRoot));
-      inTop.push(wrapPoint(pIn.u, pIn.v, rTop));
+      inTop.push(placeFlat(frame, pIn.u, pIn.v, rTop));
       outBot.push(wrapPoint(pOut.u, pOut.v, rRoot));
-      outTop.push(wrapPoint(pOut.u, pOut.v, rTop));
+      outTop.push(placeFlat(frame, pOut.u, pOut.v, rTop));
     }
 
     const tris = [];
@@ -1376,7 +1404,8 @@ const build3DRingShells = ({
               const pv = stone.y + (p.x * sinR + p.y * cosR);
               const pTris = buildFacetedCrownShell(
                 prongOutline, pu, pv, 0,
-                prongRoot, outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.08, 0.7
+                prongRoot, outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.08, 0.7,
+                { frameU: stone.x, frameV: stone.y, wrapRoot: true }
               );
               allVProngTris.push(...pTris);
             });
@@ -1404,7 +1433,8 @@ const build3DRingShells = ({
             const pv = stone.y + (p.x * sinR + p.y * cosR);
             const pTris = buildFacetedCrownShell(
               prongOutline, pu, pv, 0,
-              Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.12, 0.7
+              Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.12, 0.7,
+              { frameU: stone.x, frameV: stone.y, wrapRoot: true }
             );
             allProngTris.push(...pTris);
           });
@@ -1447,7 +1477,8 @@ const build3DRingShells = ({
             const hv = stone.y + (hp.x * sinR + hp.y * cosR);
             const hTris = buildFacetedCrownShell(
               haloGemOutline, hu, hv, 0,
-              outerRadius + setRelief * 0.2, outerRadius + setRelief * 0.65, outerRadius + setRelief * 0.88, 0.65
+              outerRadius + setRelief * 0.2, outerRadius + setRelief * 0.65, outerRadius + setRelief * 0.88, 0.65,
+              { frameU: stone.x, frameV: stone.y }
             );
             haloTris.push(...hTris);
           });
@@ -3637,5 +3668,3 @@ root.render(<App />);
 </script>
 </body>
 </html>
-
-</body></html>
