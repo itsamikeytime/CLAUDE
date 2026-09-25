@@ -489,6 +489,11 @@ const getFacetGeometry = (shape, hw, hh) => {
   return { girdle: scaled(0.94), rings: [], table, lines };
 };
 
+// Color of halo stone i: its own pick when "Unique stones in halo" is on,
+// otherwise the halo's base color. Shared by the 2D blueprint and 3D model.
+const getHaloStoneColor = (stone, i) =>
+  (stone.haloUniqueStones && stone.haloOverrides?.[i]) || stone.haloColor || '#fbfbfb';
+
 const getHaloData = (shape, hw, hh, haloSize) => {
   const pts = getShapeOutlinePoints(shape, hw, hh, 120);
   const offset = (haloSize / 2) + 0.15;
@@ -868,35 +873,91 @@ const build3DRingShells = ({
       };
     };
 
-    // A stone wider than the band can't have a socket cut at full size: it
-    // would take the band's whole width and leave paper-thin rims. Instead the
-    // socket keeps the stone's own outline, shrunk about the stone's center
-    // until a solid rim remains on both sides of the band. The stone's
-    // pavilion narrows to match below the band surface (see seatScale).
+    // Socket + plug. When the stone fits across the band, the socket is the
+    // stone's outline (slightly enlarged) around its center, as before.
+    // Otherwise the plug - the part of the stone that sits down in the band -
+    // is a shrunken copy of the outline placed over the part of the stone
+    // that actually overlaps the band: an offset or angled stone, or a long
+    // marquise, keeps its plug on the band instead of centered on a stone
+    // middle that may hang off it. It is the largest copy that fits inside
+    // both the stone and the band while leaving a solid rim on each side.
     const rimMin = Math.max(0.35, bw * 0.1);
     const seatHalfV = halfW - rimMin;
-    let cutScale = pocketCutScale;
-    outlinePts.forEach((pt) => {
-      const dv = pt.x * sinR + pt.y * cosR;
-      if (dv > 1e-6) cutScale = Math.min(cutScale, (seatHalfV - stone.y) / dv);
-      else if (dv < -1e-6) cutScale = Math.min(cutScale, (-seatHalfV - stone.y) / dv);
-    });
-    const hasSocket = cutScale >= 0.25;
-    if (!hasSocket) cutScale = 0.25;
-    const isNarrowSeat = cutScale < pocketCutScale - 1e-6;
-    const seatScale = isNarrowSeat ? Math.min(1, (cutScale / pocketCutScale) * 0.985) : 1;
+    const worldPts = outlinePts.map(pt => ({
+      u: stone.x + (pt.x * cosR - pt.y * sinR),
+      v: stone.y + (pt.x * sinR + pt.y * cosR)
+    }));
+    const vMin = Math.min(...worldPts.map(p => p.v));
+    const vMax = Math.max(...worldPts.map(p => p.v));
 
-    const cutContourUV = outlinePts.map(pt => toWorldUV(pt, cutScale));
+    // Feasible plug-center heights (v) for scale s: the plug's v-extent
+    // c(1-s) + s*[vMin, vMax] must stay within the rims, and the center must
+    // lie inside the stone.
+    const plugCenterRange = (sc) => {
+      if (sc >= 1) return (vMin >= -seatHalfV && vMax <= seatHalfV) ? [vMin, vMax] : null;
+      const lo = Math.max(vMin, (-seatHalfV - sc * vMin) / (1 - sc));
+      const hi = Math.min(vMax, (seatHalfV - sc * vMax) / (1 - sc));
+      return lo <= hi ? [lo, hi] : null;
+    };
+    // Center of the stone's chord at height v (keeps the plug inside the stone).
+    const chordMidU = (v) => {
+      let uLo = Infinity, uHi = -Infinity;
+      for (let i = 0; i < worldPts.length; i++) {
+        const p1 = worldPts[i], p2 = worldPts[(i + 1) % worldPts.length];
+        if ((p1.v - v) * (p2.v - v) > 0 || p1.v === p2.v) continue;
+        const t = (v - p1.v) / (p2.v - p1.v);
+        const u = p1.u + (p2.u - p1.u) * t;
+        uLo = Math.min(uLo, u); uHi = Math.max(uHi, u);
+      }
+      return Number.isFinite(uLo) ? (uLo + uHi) / 2 : stone.x;
+    };
+
+    const fullRange = (vMin * pocketCutScale - stone.y * (pocketCutScale - 1) >= -seatHalfV &&
+      vMax * pocketCutScale - stone.y * (pocketCutScale - 1) <= seatHalfV);
+    let plugScale = 0;
+    let plugCenter = { u: stone.x, v: stone.y };
+    if (!fullRange) {
+      let lo = 0, hi = 1;
+      for (let step = 0; step < 30; step++) {
+        const mid = (lo + hi) / 2;
+        if (plugCenterRange(mid)) lo = mid; else hi = mid;
+      }
+      plugScale = lo;
+      const range = plugCenterRange(plugScale);
+      if (range) {
+        const cv = Math.max(range[0], Math.min(range[1], stone.y));
+        plugCenter = { u: chordMidU(cv), v: cv };
+      }
+    }
+    const isNarrowSeat = !fullRange;
+    const hasSocket = !isNarrowSeat || plugScale >= 0.2;
+    const plugAround = (k) => worldPts.map((p, i) => ({
+      u: plugCenter.u + (p.u - plugCenter.u) * k,
+      v: plugCenter.v + (p.v - plugCenter.v) * k,
+      isCorner: outlinePts[i].isCorner
+    }));
+    // The stone's root, in its own unrotated 2D frame, for the 3D builder.
+    const toLocal = (p) => {
+      const du = p.u - stone.x, dv = p.v - stone.y;
+      return { x: du * cosR + dv * sinR, y: -du * sinR + dv * cosR };
+    };
+    const plugRootPts2D = isNarrowSeat && hasSocket ? plugAround(plugScale * 0.985).map(toLocal) : null;
+    const plugCenter2D = toLocal(plugCenter);
+
+    const cutContourUV = isNarrowSeat
+      ? plugAround(Math.max(plugScale, 0.2)).map(p => ({ ...p, v: Math.max(-safeRimV, Math.min(safeRimV, p.v)) }))
+      : outlinePts.map(pt => toWorldUV(pt, pocketCutScale));
     const cornerUVs = cutContourUV.filter(pt => pt.isCorner);
 
     return {
       ...stone,
       w, h, hw, hh, rot,
       cosR, sinR,
-      maxRadius: Math.max(hw, hh) * cutScale + 0.45,
+      maxRadius: Math.max(...cutContourUV.map(p => Math.hypot(p.u - stone.x, p.v - stone.y))) + 0.45,
       hasSocket,
-      isNarrowSeat,
-      seatScale,
+      isNarrowSeat: isNarrowSeat && hasSocket,
+      plugRootPts2D,
+      plugCenter2D,
       outlinePts,
       cutContourUV,
       cornerUVs,
@@ -1065,6 +1126,17 @@ const build3DRingShells = ({
       const proj = projectPointToPolygonContour2D(cu, cv, hint.cutContourUV);
       cu = proj.u;
       cv = Math.max(-safeRimV, Math.min(safeRimV, proj.v));
+      // Snap to a sharp corner the same way grid points do, so a crossing and
+      // a snapped grid point at that corner become one vertex, not two
+      // almost-coincident ones that leave a pinhole in the mesh.
+      for (let c = 0; c < hint.cornerUVs.length; c++) {
+        const cPt = hint.cornerUVs[c];
+        if (Math.hypot(cu - cPt.u, cv - cPt.v) < 0.09) {
+          cu = cPt.u;
+          cv = Math.max(-safeRimV, Math.min(safeRimV, cPt.v));
+          break;
+        }
+      }
     }
 
     cached = {
@@ -1173,9 +1245,12 @@ const build3DRingShells = ({
   // prong's foot stays planted in the metal wherever the band falls away.
   // opts.rootOffsetV: slide the root layer across the band (a prong whose tip
   // is past the band edge leans in so its foot still lands on the band).
-  // opts.rootScale + opts.seatR: narrow the root layer, and add a matching
-  // seat layer at seatR, so a stone wider than the band tapers into its
-  // narrowed socket and only reaches full width above the band surface.
+  // opts.rootPts2D + opts.rootCenter2D + opts.seatR: replace the root layer
+  // with a plug outline (same point count, in this shape's own 2D frame) and
+  // add a matching seat layer at seatR, so a stone wider than the band tapers
+  // into its socket - wherever on the stone that socket sits - and only
+  // reaches full width above the band surface. opts.rootScale shrinks the
+  // root about the center instead (used when no plug outline is given).
   const buildFacetedCrownShell = (pts2D, centerU, centerV, rotDeg, rRoot, rGirdle, rTable, tableScale, opts = {}) => {
     const rad = (rotDeg * Math.PI) / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
@@ -1205,7 +1280,7 @@ const build3DRingShells = ({
 
     for (let i = 0; i < n; i++) {
       const pFull = transform2D(pts2D[i], 1.0);
-      const pRoot = transform2D(pts2D[i], rootScale);
+      const pRoot = opts.rootPts2D ? transform2D(opts.rootPts2D[i]) : transform2D(pts2D[i], rootScale);
       const pTable = transform2D(pts2D[i], tableScale);
       bottomRing.push(placeRoot(pRoot.u, pRoot.v + rootOffsetV, rRoot));
       if (hasSeat) seatRing.push(placeFlat(frame, pRoot.u, pRoot.v, opts.seatR));
@@ -1213,7 +1288,8 @@ const build3DRingShells = ({
       tableRing.push(placeFlat(frame, pTable.u, pTable.v, rTable));
     }
 
-    const bottomCenter = placeRoot(centerU, centerV + rootOffsetV, rRoot);
+    const rootCenter = opts.rootCenter2D ? transform2D(opts.rootCenter2D) : { u: centerU, v: centerV };
+    const bottomCenter = placeRoot(rootCenter.u, rootCenter.v + rootOffsetV, rRoot);
     const topCenter = placeFlat(frame, centerU, centerV, rTable);
     const lowerRing = hasSeat ? seatRing : bottomRing;
     const tris = [];
@@ -1528,7 +1604,7 @@ const build3DRingShells = ({
         const seatR = outerRadius + 0.02;
         rGirdle = Math.max(rGirdle, seatR + 0.12);
         rTable = Math.max(rTable, rGirdle + 0.2);
-        gemOpts = { rootScale: stone.seatScale, seatR };
+        gemOpts = { rootPts2D: stone.plugRootPts2D, rootCenter2D: stone.plugCenter2D, seatR };
       }
 
       const gemTris = buildFacetedCrownShell(pts, stone.x, stone.y, rot, rRoot, rGirdle, rTable, isFlushStone ? 0.78 : 0.64, gemOpts);
@@ -1642,8 +1718,13 @@ const build3DRingShells = ({
             triangles: seatTris
           });
 
-          const haloTris = [];
-          hData.stones.forEach((hp) => {
+          // One part per halo color, so per-stone colors show in 3D and each
+          // color exports as its own named object for multi-color printing.
+          const haloGroups = new Map();
+          hData.stones.forEach((hp, hIdx) => {
+            const hColor = getHaloStoneColor(stone, hIdx);
+            if (!haloGroups.has(hColor)) haloGroups.set(hColor, []);
+            const haloTris = haloGroups.get(hColor);
             const hu = stone.x + (hp.x * cosR - hp.y * sinR);
             const hv = stone.y + (hp.x * sinR + hp.y * cosR);
             const hTris = buildFacetedCrownShell(
@@ -1654,12 +1735,19 @@ const build3DRingShells = ({
             haloTris.push(...hTris);
           });
 
-          shells.push({
-            name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Halo_Gems`,
-            role: `Stone ${idx + 1} Halo Gems (${hData.numStones})`,
-            color: stone.haloColor || '#fbfbfb',
-            isMetal: false,
-            triangles: haloTris
+          const baseHaloColor = getHaloStoneColor({ ...stone, haloUniqueStones: false }, 0);
+          haloGroups.forEach((haloTris, hColor) => {
+            const count = haloTris.length / (haloGemOutline.length * 6);
+            const colorName = Object.keys(PRESET_STONES).find(k => PRESET_STONES[k] === hColor);
+            const isBase = hColor === baseHaloColor;
+            const suffix = isBase ? '' : `_${(colorName || hColor.replace('#', '')).replace(/\s+/g, '')}`;
+            shells.push({
+              name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Halo_Gems${suffix}`,
+              role: `Stone ${idx + 1} Halo Gems${isBase ? '' : ` - ${colorName || hColor}`} (${count})`,
+              color: hColor,
+              isMetal: false,
+              triangles: haloTris
+            });
           });
         }
       }
@@ -2582,7 +2670,7 @@ function App() {
         <g>
           <path d={`M ${metalCenterLine} Z`} fill="none" stroke={bandFill} strokeWidth={hSize * 1.2} strokeLinejoin="round" filter={isFlatBand ? undefined : "url(#part-shadow)"} />
           {hData.stones.map((p, i) => {
-            const fill = stone.haloOverrides?.[i] || stone.haloColor || '#fbfbfb';
+            const fill = getHaloStoneColor(stone, i);
             return (
               <g key={i} transform={`translate(${p.x}, ${p.y})`}>
                 <circle cx="0" cy="0" r={r} fill={fill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />
