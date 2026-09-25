@@ -97,8 +97,21 @@ const Eye = (p) => <IconBase {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10
 const Printer = (p) => <IconBase {...p}><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1"/><path d="M6 17v4h12v-4"/></IconBase>;
 const Compass = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="m14.5 9.5-2 5-5 2 2-5 5-2Z"/></IconBase>;
 const PackageCheck = (p) => <IconBase {...p}><path d="M21 8V5a1 1 0 0 0-.5-.9L12 1 3.5 4.1A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.9L12 23l3-1.5"/><path d="M3.3 6.6 12 11l8.7-4.4"/><path d="M12 22V11"/><path d="m17 17 2 2 4-4"/></IconBase>;
+const Undo2 = (p) => <IconBase {...p}><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></IconBase>;
+const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></IconBase>;
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
+
+const APP_VERSION = '1.3';
+// Compares dotted versions part by part (so 1.10 is newer than 1.3).
+const compareVersions = (a, b) => {
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d > 0 ? 1 : -1;
+  }
+  return 0;
+};
 
 const PRESET_STONES = {
   'Diamond': '#fbfbfb', 'Ruby': '#e0115f', 'Sapphire': '#0f52ba',
@@ -203,6 +216,11 @@ const CompactControl = ({ label, value, min, max, step = 0.25, onChange, disable
     />
   </div>
 );
+
+// Crescent Moon arcs, as multiples of the half-width, both centered on the
+// left edge: the outer arc reaches the right edge, the inner one stops short.
+const CRESCENT_OUTER = 2.0;
+const CRESCENT_INNER = 1.1;
 
 const getShapeOutlinePoints = (shape, hw, hh, steps = 96) => {
   const pts = [];
@@ -324,13 +342,16 @@ const getShapeOutlinePoints = (shape, hw, hh, steps = 96) => {
       isCorner = i === 0 || i === half;
       miterLimit = i === 0 ? 1.05 : (i === half ? 1.32 : 1.15);
     } else if (shape === 'Crescent Moon') {
+      // Fills its full stated width: tips at the left edge (x = -hw), outer
+      // curve reaching the right edge (x = +hw), body 45% of the width thick
+      // at its middle. (Before 1.3 it spanned only half its stated width.)
       if (i < half) {
         const t2 = (i / half) * Math.PI;
-        x = hw * Math.sin(t2) - hw * 0.25;
+        x = -hw + CRESCENT_OUTER * hw * Math.sin(t2);
         y = -hh * Math.cos(t2);
       } else {
         const a = Math.PI * (1 - ((i - half) / (steps - half)));
-        x = hw * 0.5 * Math.sin(a) - hw * 0.25;
+        x = -hw + CRESCENT_INNER * hw * Math.sin(a);
         y = -hh * Math.cos(a);
       }
       isCorner = i === 0 || i === half;
@@ -532,7 +553,7 @@ const getProngPositions = (style, shape, hw, hh) => {
     if (shape === 'Pear') return [{ x: 0, y: -hh * 0.9 }, { x: -hw * 0.85, y: 0 }, { x: hw * 0.85, y: 0 }, { x: 0, y: hh * 0.9 }];
     if (shape === 'Marquise') return [{ x: -hw * 0.65, y: -hh * 0.35 }, { x: hw * 0.65, y: -hh * 0.35 }, { x: -hw * 0.65, y: hh * 0.35 }, { x: hw * 0.65, y: hh * 0.35 }];
     if (shape === 'Heart') return [{ x: -hw * 0.75, y: -hh * 0.5 }, { x: hw * 0.75, y: -hh * 0.5 }, { x: -hw * 0.15, y: hh * 0.8 }, { x: hw * 0.15, y: hh * 0.8 }];
-    if (shape === 'Crescent Moon') return [{ x: -hw * 0.05, y: -hh * 0.8 }, { x: hw * 0.7, y: -hh * 0.15 }, { x: hw * 0.7, y: hh * 0.15 }, { x: -hw * 0.05, y: hh * 0.8 }];
+    if (shape === 'Crescent Moon') return [{ x: -hw * 0.07, y: -hh * 0.8 }, { x: hw * 0.93, y: -hh * 0.2 }, { x: hw * 0.93, y: hh * 0.2 }, { x: -hw * 0.07, y: hh * 0.8 }];
     if (shape === 'Hexagon') {
       const sx = hw * 0.866025;
       return [{ x: -sx, y: -hh * 0.6 }, { x: sx, y: -hh * 0.6 }, { x: -sx, y: hh * 0.6 }, { x: sx, y: hh * 0.6 }];
@@ -552,8 +573,8 @@ const getProngPositions = (style, shape, hw, hh) => {
     }
     if (shape === 'Crescent Moon') {
       return [
-        { x: -hw * 0.2, y: -hh * 0.9 }, { x: -hw * 0.2, y: hh * 0.9 }, { x: hw * 0.62, y: -hh * 0.5 },
-        { x: hw * 0.62, y: hh * 0.5 }, { x: hw * 0.25, y: 0 }, { x: hw * 0.72, y: 0 }
+        { x: -hw * 0.39, y: -hh * 0.92 }, { x: -hw * 0.39, y: hh * 0.92 }, { x: hw * 0.72, y: -hh * 0.5 },
+        { x: hw * 0.72, y: hh * 0.5 }, { x: hw * 0.1, y: 0 }, { x: hw * 0.96, y: 0 }
       ];
     }
     if (shape === 'Hexagon') {
@@ -665,12 +686,12 @@ const getVProngData = (shape, hw, hh) => {
   if (shape === 'Crescent Moon') {
     return {
       chevrons: [
-        { a: { x: -hw * 0.08, y: -hh + hw * 0.22 }, v: { x: -hw * 0.22, y: -hh * 0.96 }, b: { x: 0.04 * hw, y: -hh * 0.82 } },
-        { a: { x: 0.04 * hw, y: hh * 0.82 }, v: { x: -hw * 0.22, y: hh * 0.96 }, b: { x: -hw * 0.08, y: hh - hw * 0.22 } }
+        { a: { x: -hw * 0.7, y: -hh }, v: { x: -hw * 0.99, y: -hh * 0.99 }, b: { x: -hw * 0.55, y: -hh * 0.88 } },
+        { a: { x: -hw * 0.55, y: hh * 0.88 }, v: { x: -hw * 0.99, y: hh * 0.99 }, b: { x: -hw * 0.7, y: hh } }
       ],
       roundProngs: [
-        { x: hw * 0.7, y: -hh * 0.15 },
-        { x: hw * 0.7, y: hh * 0.15 }
+        { x: hw * 0.93, y: -hh * 0.2 },
+        { x: hw * 0.93, y: hh * 0.2 }
       ]
     };
   }
@@ -737,6 +758,64 @@ const projectPointToPolygonContour2D = (u, v, poly) => {
   return { u: bestX, v: bestY };
 };
 
+// Triangulates a simple polygon (array of {x, y}) by ear clipping and
+// returns index triples in the polygon's own winding. Unlike a fan from the
+// center, this is correct for shapes the center can't see all of, such as a
+// crescent (its center sits in the hollow).
+const earClipPolygon = (poly) => {
+  const n = poly.length;
+  if (n < 3) return [];
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const a = poly[i], b = poly[(i + 1) % n];
+    area += a.x * b.y - b.x * a.y;
+  }
+  const sign = area >= 0 ? 1 : -1;
+  const cross = (a, b, c) => ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) * sign;
+  const inTri = (p, a, b, c) => cross(a, b, p) > 1e-12 && cross(b, c, p) > 1e-12 && cross(c, a, p) > 1e-12;
+  const idx = Array.from({ length: n }, (_, i) => i);
+  const tris = [];
+  let guard = 0;
+  while (idx.length > 3 && guard++ < n * n) {
+    let clipped = false;
+    for (let k = 0; k < idx.length; k++) {
+      const i0 = idx[(k + idx.length - 1) % idx.length], i1 = idx[k], i2 = idx[(k + 1) % idx.length];
+      const a = poly[i0], b = poly[i1], c = poly[i2];
+      if (cross(a, b, c) <= 1e-12) continue;
+      let blocked = false;
+      for (const j of idx) {
+        if (j === i0 || j === i1 || j === i2) continue;
+        if (inTri(poly[j], a, b, c)) { blocked = true; break; }
+      }
+      if (blocked) continue;
+      tris.push([i0, i1, i2]);
+      idx.splice(k, 1);
+      clipped = true;
+      break;
+    }
+    if (!clipped) {
+      // Only collinear runs remain: clip one anyway (zero-area) to finish.
+      tris.push([idx[idx.length - 1], idx[0], idx[1]]);
+      idx.splice(0, 1);
+    }
+  }
+  if (idx.length === 3) tris.push([idx[0], idx[1], idx[2]]);
+  return tris;
+};
+
+// Shrinks a stone outline for its table facet. Most shapes scale toward the
+// center; a crescent instead thins toward its own midline (scaling would push
+// the table into its hollow). Outer point i pairs with inner point n - i.
+const insetStoneOutline = (shape, pts, k) => {
+  if (shape !== 'Crescent Moon') return pts.map(p => ({ ...p, x: p.x * k, y: p.y * k }));
+  const n = pts.length;
+  const f = (1 - k) / 2;
+  return pts.map((p, i) => {
+    const q = pts[(n - i) % n];
+    return { ...p, x: p.x + (q.x - p.x) * f, y: p.y + (q.y - p.y) * f };
+  });
+};
+
 // Band cross-section. drop(v) is how far the outer surface sits below the
 // band's crown at position v across the band (v = 0 is the centerline, the
 // edges are at +/-halfW). Shared by the 3D model and the 2D blueprint shading.
@@ -748,13 +827,28 @@ const BAND_PROFILES = [
   { id: 'bevel', label: 'Beveled' },
   { id: 'round', label: 'Rounded' }
 ];
-const getBandProfile = (profile, halfW, thickness) => {
+// `size` (mm) overrides the automatic bevel width / dome height; it is capped
+// so the band always keeps a flat strip (bevel) and solid metal at the rims.
+const getAutoProfileSize = (profile, halfW, thickness) => (
+  profile === 'bevel' ? Math.min(0.6, halfW * 0.3, thickness * 0.35)
+    : profile === 'round' ? Math.min(thickness * 0.45, halfW * 0.5)
+      : 0
+);
+const getMaxProfileSize = (profile, halfW, thickness) => (
+  profile === 'bevel' ? Math.min(halfW * 0.9, thickness * 0.8)
+    : profile === 'round' ? Math.min(thickness * 0.8, halfW)
+      : 0
+);
+const getBandProfile = (profile, halfW, thickness, size = null) => {
+  const auto = getAutoProfileSize(profile, halfW, thickness);
+  const wanted = size === null || size === '' || !Number.isFinite(Number(size)) ? auto : Math.max(0.05, Number(size));
+  const sized = Math.min(wanted, getMaxProfileSize(profile, halfW, thickness));
   if (profile === 'bevel') {
-    const edge = Math.min(0.6, halfW * 0.3, thickness * 0.35);
+    const edge = sized;
     return { edge, breakV: halfW - edge, drop: (v) => Math.max(0, Math.abs(v) - (halfW - edge)) };
   }
   if (profile === 'round') {
-    const edge = Math.min(thickness * 0.45, halfW * 0.5);
+    const edge = sized;
     return {
       edge,
       breakV: 0,
@@ -778,7 +872,8 @@ const build3DRingShells = ({
   uniqueStone3D,
   include3DSettings,
   cutoutMode = 'pocket_and_gem',
-  bandProfile = 'flat'
+  bandProfile = 'flat',
+  bandProfileSize = null
 }) => {
   const innerDiameter = RING_SIZES_MM[ringSize] || (11.63 + Number(ringSize) * 0.8128);
   const innerRadius = innerDiameter / 2;
@@ -790,7 +885,7 @@ const build3DRingShells = ({
   const globalRelief = Number(gemRelief ?? 1.2);
   const globalPocketDepth = Math.min(thickness * 0.72, Math.max(0.2, Number(pocketDepthInput) || 0.75));
   const defaultRFloor = outerRadius - globalPocketDepth;
-  const profile = getBandProfile(bandProfile, halfW, thickness);
+  const profile = getBandProfile(bandProfile, halfW, thickness, bandProfileSize);
   // Radius of the band's outer surface at position v across the band.
   const surfR = (v) => outerRadius - profile.drop(v);
 
@@ -980,7 +1075,6 @@ const build3DRingShells = ({
       return { x: du * cosR + dv * sinR, y: -du * sinR + dv * cosR };
     };
     const plugRootPts2D = isNarrowSeat && hasSocket ? plugAround(plugScale * 0.985).map(toLocal) : null;
-    const plugCenter2D = toLocal(plugCenter);
 
     const cutContourUV = isNarrowSeat
       ? plugAround(Math.max(plugScale, 0.2)).map(p => ({ ...p, v: Math.max(-safeRimV, Math.min(safeRimV, p.v)) }))
@@ -993,18 +1087,36 @@ const build3DRingShells = ({
       cosR, sinR,
       maxRadius: Math.max(...cutContourUV.map(p => Math.hypot(p.u - stone.x, p.v - stone.y))) + 0.45,
       hasSocket,
+      overlapsBand: vMin < seatHalfV && vMax > -seatHalfV,
       isNarrowSeat: isNarrowSeat && hasSocket,
       plugRootPts2D,
-      plugCenter2D,
       outlinePts,
       cutContourUV,
       cornerUVs,
       isFlushStone,
       effectiveRelief,
       stonePocketDepth,
-      stoneRFloor
+      stoneRFloor,
+      plugScale,
+      requestedPocketDepth: (uniqueStone3D && stone.pocketDepthOverride !== undefined && stone.pocketDepthOverride !== null && stone.pocketDepthOverride !== '')
+        ? Number(stone.pocketDepthOverride)
+        : Number(pocketDepthInput)
     };
   });
+
+  // Notes shown on each stone's card when the model adjusts the design or a
+  // part may be hard to print. level: 'warn' needs attention, 'info' explains.
+  const MIN_METAL_UNDER_SOCKET = 0.6;
+  const stoneNotes = {};
+  const addNote = (stone, level, text) => {
+    const key = stone.id ?? stone.originalIndex;
+    (stoneNotes[key] = stoneNotes[key] || []).push({ level, text });
+  };
+  const leaningStones = new Set();
+  const noteLean = (stone, offset) => {
+    if (Math.abs(offset) > 0.01) leaningStones.add(stone);
+    return offset;
+  };
 
   const carveBandPockets = cutoutMode !== 'solid_band' && preparedStones.length > 0;
 
@@ -1304,7 +1416,8 @@ const build3DRingShells = ({
   // prong's foot stays planted in the metal wherever the band falls away.
   // opts.rootOffsetV: slide the root layer across the band (a prong whose tip
   // is past the band edge leans in so its foot still lands on the band).
-  // opts.rootPts2D + opts.rootCenter2D + opts.seatR: replace the root layer
+  // opts.tablePts2D: the table outline (default: outline * tableScale).
+  // opts.rootPts2D + opts.seatR: replace the root layer
   // with a plug outline (same point count, in this shape's own 2D frame) and
   // add a matching seat layer at seatR, so a stone wider than the band tapers
   // into its socket - wherever on the stone that socket sits - and only
@@ -1329,6 +1442,10 @@ const build3DRingShells = ({
     };
 
     const rootScale = opts.rootScale ?? 1;
+    const tablePts2D = opts.tablePts2D || pts2D.map(p => ({ x: p.x * tableScale, y: p.y * tableScale }));
+    const bottomPts2D = opts.rootPts2D || pts2D.map(p => ({ x: p.x * rootScale, y: p.y * rootScale }));
+    const bottomCaps = earClipPolygon(bottomPts2D);
+    const topCaps = earClipPolygon(tablePts2D);
     const rootOffsetV = opts.rootOffsetV ?? 0;
     const hasSeat = opts.seatR !== undefined && opts.seatR !== null;
 
@@ -1340,22 +1457,18 @@ const build3DRingShells = ({
     for (let i = 0; i < n; i++) {
       const pFull = transform2D(pts2D[i], 1.0);
       const pRoot = opts.rootPts2D ? transform2D(opts.rootPts2D[i]) : transform2D(pts2D[i], rootScale);
-      const pTable = transform2D(pts2D[i], tableScale);
+      const pTable = transform2D(tablePts2D[i]);
       bottomRing.push(placeRoot(pRoot.u, pRoot.v + rootOffsetV, rRoot));
       if (hasSeat) seatRing.push(placeFlat(frame, pRoot.u, pRoot.v, opts.seatR));
       girdleRing.push(placeFlat(frame, pFull.u, pFull.v, rGirdle));
       tableRing.push(placeFlat(frame, pTable.u, pTable.v, rTable));
     }
 
-    const rootCenter = opts.rootCenter2D ? transform2D(opts.rootCenter2D) : { u: centerU, v: centerV };
-    const bottomCenter = placeRoot(rootCenter.u, rootCenter.v + rootOffsetV, rRoot);
-    const topCenter = placeFlat(frame, centerU, centerV, rTable);
     const lowerRing = hasSeat ? seatRing : bottomRing;
     const tris = [];
 
     for (let i = 0; i < n; i++) {
       const next = (i + 1) % n;
-      tris.push([bottomCenter, bottomRing[i], bottomRing[next]]);
       if (hasSeat) {
         tris.push([bottomRing[i], seatRing[i], seatRing[next]]);
         tris.push([bottomRing[i], seatRing[next], bottomRing[next]]);
@@ -1364,8 +1477,10 @@ const build3DRingShells = ({
       tris.push([lowerRing[i], girdleRing[next], lowerRing[next]]);
       tris.push([girdleRing[i], tableRing[i], tableRing[next]]);
       tris.push([girdleRing[i], tableRing[next], girdleRing[next]]);
-      tris.push([topCenter, tableRing[next], tableRing[i]]);
     }
+    // Flat bottom and table caps, triangulated from their outlines.
+    bottomCaps.forEach(([a, b, c]) => tris.push([bottomRing[a], bottomRing[b], bottomRing[c]]));
+    topCaps.forEach(([a, b, c]) => tris.push([tableRing[c], tableRing[b], tableRing[a]]));
 
     return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'gem' }));
   };
@@ -1567,6 +1682,7 @@ const build3DRingShells = ({
       const clampedRootV = Math.abs(uvR.v) > halfW * 0.95
         ? uvR.v * 0.25 + Math.sign(uvR.v) * halfW * 0.95 * 0.75
         : uvR.v;
+      if (clampedRootV !== uvR.v) leaningStones.add(stone);
 
       // Foot follows the band's curve so it stays planted in the shank.
       rootRing.push(wrapPoint(uvR.u, clampedRootV, Math.min(rRoot, surfR(clampedRootV) - 0.25)));
@@ -1663,10 +1779,12 @@ const build3DRingShells = ({
         const seatR = outerRadius + 0.02;
         rGirdle = Math.max(rGirdle, seatR + 0.12);
         rTable = Math.max(rTable, rGirdle + 0.2);
-        gemOpts = { rootPts2D: stone.plugRootPts2D, rootCenter2D: stone.plugCenter2D, seatR };
+        gemOpts = { rootPts2D: stone.plugRootPts2D, seatR };
       }
 
-      const gemTris = buildFacetedCrownShell(pts, stone.x, stone.y, rot, rRoot, rGirdle, rTable, isFlushStone ? 0.78 : 0.64, gemOpts);
+      const tableK = isFlushStone ? 0.78 : 0.64;
+      gemOpts.tablePts2D = insetStoneOutline(shape, pts, tableK);
+      const gemTris = buildFacetedCrownShell(pts, stone.x, stone.y, rot, rRoot, rGirdle, rTable, tableK, gemOpts);
       shells.push({
         name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_${shape.replace(/\s+/g, '')}`,
         role: `Stone ${idx + 1} (${stone.colorMode === 'preset' ? stone.preset : 'Custom'})`,
@@ -1711,7 +1829,7 @@ const build3DRingShells = ({
               const pTris = buildFacetedCrownShell(
                 prongOutline, pu, pv, 0,
                 prongRoot, outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.08, 0.7,
-                { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: footOffsetV(pv, pRadius) }
+                { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: noteLean(stone, footOffsetV(pv, pRadius)) }
               );
               allVProngTris.push(...pTris);
             });
@@ -1740,7 +1858,7 @@ const build3DRingShells = ({
             const pTris = buildFacetedCrownShell(
               prongOutline, pu, pv, 0,
               Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.12, 0.7,
-              { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: footOffsetV(pv, pRadius) }
+              { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: noteLean(stone, footOffsetV(pv, pRadius)) }
             );
             allProngTris.push(...pTris);
           });
@@ -1813,7 +1931,33 @@ const build3DRingShells = ({
     });
   }
 
-  return { shells, innerDiameter, outerDiameter: outerRadius * 2, bandWidth: bw };
+  preparedStones.forEach((stone) => {
+    const fmt = (n) => Number(n).toFixed(2).replace(/\.?0+$/, '');
+    if (carveBandPockets) {
+      if (!stone.hasSocket && !stone.overlapsBand) {
+        addNote(stone, 'warn', 'This stone is off the band, so no socket is cut. Move it toward the band center or widen the band.');
+      } else if (!stone.hasSocket) {
+        addNote(stone, 'warn', `Too large for the ${fmt(bw)} mm band to hold: a plug that fits would be under 20% of the stone, so no socket is cut. Widen the band or use a smaller stone.`);
+      } else if (stone.isNarrowSeat) {
+        addNote(stone, 'info', `Wider than the ${fmt(bw)} mm band: its plug is narrowed to ${Math.round(stone.plugScale * 100)}% of the stone's outline so the band keeps solid rims.`);
+      }
+      if (stone.requestedPocketDepth - stone.stonePocketDepth > 0.005) {
+        addNote(stone, 'warn', `Socket depth capped at ${fmt(stone.stonePocketDepth)} mm (requested ${fmt(stone.requestedPocketDepth)} mm) to keep the ${fmt(thickness)} mm band intact.`);
+      }
+      const metalUnder = stone.stoneRFloor - innerRadius;
+      if (stone.hasSocket && metalUnder < MIN_METAL_UNDER_SOCKET) {
+        addNote(stone, 'warn', `Only ${fmt(metalUnder)} mm of metal under this socket; ${MIN_METAL_UNDER_SOCKET} mm or more is safer to print. Use a shallower socket or a thicker band.`);
+      }
+    }
+    if (stone.isFlushStone && stone.isNarrowSeat) {
+      addNote(stone, 'info', 'Too wide to set flush in this band, so it sits just above the band surface.');
+    }
+    if (include3DSettings && leaningStones.has(stone)) {
+      addNote(stone, 'info', 'Prongs past the band edge lean inward so their feet land on the band.');
+    }
+  });
+
+  return { shells, innerDiameter, outerDiameter: outerRadius * 2, bandWidth: bw, stoneNotes };
 };
 
 const generateBinarySTLBlob = (shells, bandWidth = 4) => {
@@ -1824,7 +1968,7 @@ const generateBinarySTLBlob = (shells, bandWidth = 4) => {
   const arrayBuffer = new ArrayBuffer(bufferLength);
   const view = new DataView(arrayBuffer);
 
-  const headerText = `MikeyTime Ring Studio Welded Multi-Shell STL (${shells.length} Shells)`;
+  const headerText = `MikeyTime Ring Studio v${APP_VERSION} Welded Multi-Shell STL (${shells.length} Shells)`;
   for (let i = 0; i < 80; i++) {
     view.setUint8(i, i < headerText.length ? headerText.charCodeAt(i) : 32);
   }
@@ -1913,6 +2057,7 @@ const generate3MFBlob = (shells, bandWidth = 4) => {
 
   const modelXml = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <metadata name="Application">MikeyTime Ring Studio v${APP_VERSION}</metadata>
   <resources>${objectsXml}
   </resources>
   <build>${buildItemsXml}</build>
@@ -2361,6 +2506,8 @@ function App() {
   const [include3DSettings, setInclude3DSettings] = useState(true);
   const [cutoutMode, setCutoutMode] = useState('pocket_and_gem');
   const [bandProfile, setBandProfile] = useState('flat');
+  const [bandProfileSize, setBandProfileSize] = useState(null);
+
 
   const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(true);
   const [is3DSettingsOpen, setIs3DSettingsOpen] = useState(true);
@@ -2397,6 +2544,103 @@ function App() {
       reliefOverride: '', pocketDepthOverride: ''
     },
   ]);
+
+  // ---- Undo / redo -------------------------------------------------------
+  // History covers the design itself (stones, band, 3D print settings), not
+  // view settings like zoom, rulers or overlays. Changes are committed after
+  // a short pause, so one slider drag or typed number is one undo step.
+  const designSnapshot = {
+    stones, bandColor, bandWidth, layoutMode, ringSize, bandThickness, gemRelief,
+    pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize
+  };
+  const designKey = JSON.stringify(designSnapshot);
+  const historyRef = useRef({ past: [], presentKey: null, present: null, future: [] });
+  const restoringRef = useRef(false);
+  const latestDesignRef = useRef({ key: designKey, snap: designSnapshot });
+  latestDesignRef.current = { key: designKey, snap: designSnapshot };
+  const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
+  const HISTORY_LIMIT = 100;
+
+  const syncHistoryCounts = () => {
+    const h = historyRef.current;
+    setHistoryCounts({ undo: h.past.length, redo: h.future.length });
+  };
+
+  const commitPendingChange = () => {
+    const h = historyRef.current;
+    const { key, snap } = latestDesignRef.current;
+    if (h.presentKey === null) { h.present = snap; h.presentKey = key; return; }
+    if (key === h.presentKey) return;
+    h.past.push({ snap: h.present, key: h.presentKey });
+    if (h.past.length > HISTORY_LIMIT) h.past.shift();
+    h.present = snap; h.presentKey = key; h.future = [];
+  };
+
+  useEffect(() => {
+    const h = historyRef.current;
+    if (h.presentKey === null) { h.present = latestDesignRef.current.snap; h.presentKey = designKey; return; }
+    if (restoringRef.current) { restoringRef.current = false; h.present = latestDesignRef.current.snap; h.presentKey = designKey; return; }
+    const timer = setTimeout(() => { commitPendingChange(); syncHistoryCounts(); }, 400);
+    return () => clearTimeout(timer);
+  }, [designKey]);
+
+  const applyDesign = (d) => {
+    setStones(d.stones);
+    setBandColor(d.bandColor);
+    setBandWidth(d.bandWidth);
+    setLayoutMode(d.layoutMode);
+    setRingSize(d.ringSize);
+    setBandThickness(d.bandThickness);
+    setGemRelief(d.gemRelief);
+    setPocketDepthInput(d.pocketDepthInput);
+    setUniqueStone3D(d.uniqueStone3D);
+    setInclude3DSettings(d.include3DSettings);
+    setCutoutMode(d.cutoutMode);
+    setBandProfile(d.bandProfile);
+    setBandProfileSize(d.bandProfileSize);
+  };
+
+  const undo = () => {
+    commitPendingChange();
+    const h = historyRef.current;
+    if (!h.past.length) { syncHistoryCounts(); return; }
+    h.future.push({ snap: h.present, key: h.presentKey });
+    const prev = h.past.pop();
+    h.present = prev.snap; h.presentKey = prev.key;
+    restoringRef.current = true;
+    applyDesign(prev.snap);
+    syncHistoryCounts();
+  };
+
+  const redo = () => {
+    commitPendingChange();
+    const h = historyRef.current;
+    if (!h.future.length) { syncHistoryCounts(); return; }
+    h.past.push({ snap: h.present, key: h.presentKey });
+    const next = h.future.pop();
+    h.present = next.snap; h.presentKey = next.key;
+    restoringRef.current = true;
+    applyDesign(next.snap);
+    syncHistoryCounts();
+  };
+
+  const undoRef = useRef(undo);
+  const redoRef = useRef(redo);
+  undoRef.current = undo;
+  redoRef.current = redo;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const t = e.target;
+      const isTextField = t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && ['text', 'number', 'search'].includes(t.type)) || t.isContentEditable);
+      if (isTextField) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); undoRef.current(); }
+      else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redoRef.current(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const addStone = () => {
     setStones(prevStones => {
@@ -2467,10 +2711,11 @@ function App() {
 
   const handleExportConfig = () => {
     const config = {
+      appVersion: APP_VERSION,
       zoom, bandColor, bandWidth, isFlatBand, layoutMode,
       showSeparation, showWidth, showVertical, verticalFrom,
       measTextSize, showRuler, rulerScale, rulerOffset,
-      ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile,
+      ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize,
       stones
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
@@ -2508,9 +2753,15 @@ function App() {
           setInclude3DSettings(config.include3DSettings ?? true);
           setCutoutMode(config.cutoutMode ?? 'pocket_and_gem');
           setBandProfile(BAND_PROFILES.some(bp => bp.id === config.bandProfile) ? config.bandProfile : 'flat');
+          setBandProfileSize(Number.isFinite(config.bandProfileSize) ? config.bandProfileSize : null);
 
           setStones(config.stones);
-          setErrorMessage('');
+          if (config.appVersion && compareVersions(config.appVersion, APP_VERSION) > 0) {
+            setErrorMessage(`This design was saved with v${config.appVersion}; some newer settings may not load in v${APP_VERSION}.`);
+            setTimeout(() => setErrorMessage(''), 6000);
+          } else {
+            setErrorMessage('');
+          }
         } else throw new Error("Invalid structure");
       } catch (error) {
         setErrorMessage('Failed to load file. Ensure it is a valid Ring Config format.');
@@ -2609,9 +2860,10 @@ function App() {
       uniqueStone3D,
       include3DSettings,
       cutoutMode,
-      bandProfile
+      bandProfile,
+      bandProfileSize
     });
-  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile]);
+  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize]);
 
   const handleExportSTL = useCallback(() => {
     const blob = generateBinarySTLBlob(ring3DData.shells, bandWidth);
@@ -2655,20 +2907,64 @@ function App() {
   };
 
   const handleExportCSV = () => {
-    const headers = ['Stone Index', 'Role/Side', 'Shape', 'Width (mm)', 'Height (mm)', 'Color/Preset', 'Setting Style', 'Bezel Size (mm)', '3D Relief (mm)', '3D Socket Depth (mm)'];
-    const rows = effectiveStones.map((stone, i) => {
-      const h = (stone.width * (SHAPE_RATIOS[stone.shape] || 1)).toFixed(2);
-      let role = layoutMode === 'cluster' && i === 0 ? 'Center Anchor' : stone.side;
-      const stRelief = (uniqueStone3D && stone.reliefOverride !== '' && stone.reliefOverride !== undefined) ? stone.reliefOverride : gemRelief;
-      const stDepth = (uniqueStone3D && stone.pocketDepthOverride !== '' && stone.pocketDepthOverride !== undefined) ? stone.pocketDepthOverride : pocketDepthInput;
-      return [
-        i + 1, role, stone.shape, stone.width, h,
-        stone.colorMode === 'preset' ? stone.preset : stone.color,
-        stone.settingStyle, stone.settingStyle === 'Bezel' ? stone.bezelSize : 'N/A',
-        stRelief, stDepth
-      ].join(',');
+    // One table, band first, then each stone followed by its halo stones
+    // grouped by color, so it doubles as an order list.
+    const csvCell = (v) => {
+      const str = v === null || v === undefined ? '' : String(v);
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const mm = (n) => Number(n).toFixed(2);
+    const stoneName = (hex) => Object.keys(PRESET_STONES).find(k => PRESET_STONES[k] === hex) || `Custom ${hex}`;
+    const headers = ['Item', 'Qty', 'Part', 'Shape', 'Size (mm)', 'Stone / Metal', 'Setting', 'Relief (mm)', 'Socket Depth (mm)', 'Notes'];
+    const rows = [];
+
+    const halfBW = (Number(bandWidth) || 4) / 2;
+    const thick = Math.max(1.2, Number(bandThickness) || 1.8);
+    const profileLabel = BAND_PROFILES.find(bp => bp.id === bandProfile)?.label || 'Flat';
+    const profileSize = bandProfile === 'flat' ? '' : ` (${bandProfile === 'bevel' ? 'bevel' : 'dome'} ${mm(getBandProfile(bandProfile, halfBW, thick, bandProfileSize).edge)} mm)`;
+    rows.push([
+      'Band', 1, 'Ring band', `${profileLabel} profile${profileSize}`,
+      `US ${ringSize}, bore Ø ${mm(ring3DData.innerDiameter)}, ${mm(bandWidth)} wide × ${mm(thick)} thick`,
+      `${bandColor.charAt(0).toUpperCase()}${bandColor.slice(1)} metal`, '', '', '',
+      cutoutMode === 'pocket_and_gem' ? 'Carved sockets + stones' : cutoutMode === 'sockets_only' ? 'Empty sockets only' : 'Solid band (no sockets)'
+    ]);
+
+    effectiveStones.forEach((stone, i) => {
+      const w = Number(stone.width) || 0;
+      const h = w * (SHAPE_RATIOS[stone.shape] || 1);
+      const role = layoutMode === 'cluster' ? (i === 0 ? 'center anchor' : `${stone.side} side`) : 'scatter row';
+      const stRelief = (uniqueStone3D && stone.reliefOverride !== '' && stone.reliefOverride !== undefined && stone.reliefOverride !== null) ? stone.reliefOverride : gemRelief;
+      const stDepth = (uniqueStone3D && stone.pocketDepthOverride !== '' && stone.pocketDepthOverride !== undefined && stone.pocketDepthOverride !== null) ? stone.pocketDepthOverride : pocketDepthInput;
+      const setting = stone.settingStyle === 'Bezel'
+        ? `Bezel ${mm(stone.bezelSize || 0.5)} mm, ${stone.bezelColor || bandColor}`
+        : stone.settingStyle === 'Halo' ? `Halo (${mm(stone.haloSize || 1)} mm stones)` : stone.settingStyle;
+      rows.push([
+        `Stone ${i + 1}`, 1, `Stone (${role})`, stone.shape, `${mm(w)} × ${mm(h)}`,
+        stone.colorMode === 'preset' ? stone.preset : `Custom ${stone.color}`,
+        setting, mm(stRelief), mm(stDepth),
+        (ring3DData.stoneNotes?.[stone.id] || []).map(n => n.text).join(' ')
+      ]);
+
+      if (stone.settingStyle === 'Halo') {
+        const hSize = Number(stone.haloSize) || 1.0;
+        const hData = getHaloData(stone.shape, w / 2, h / 2, hSize);
+        const byColor = new Map();
+        hData.stones.forEach((_, hIdx) => {
+          const c = getHaloStoneColor(stone, hIdx);
+          byColor.set(c, (byColor.get(c) || 0) + 1);
+        });
+        byColor.forEach((count, hex) => {
+          rows.push([
+            `Stone ${i + 1} halo`, count, 'Halo stone', 'Round Brilliant', `Ø ${mm(hSize)}`,
+            stoneName(hex), `Halo around stone ${i + 1}`, '', '', ''
+          ]);
+        });
+      }
     });
-    const csv = [headers.join(','), ...rows].join('\n');
+
+    rows.push([]);
+    rows.push([`Generated by MikeyTime Ring Studio v${APP_VERSION}`]);
+    const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     triggerDownload(blob, 'ring-bom.csv');
   };
@@ -2707,7 +3003,7 @@ function App() {
       case 'Heart':
         return `M 0 ${-hh*0.2} C ${hw*1.2} ${-hh*1.2}, ${hw*1.2} ${hh*0.4}, 0 ${hh} C ${-hw*1.2} ${hh*0.4}, ${-hw*1.2} ${-hh*1.2}, 0 ${-hh*0.2} Z`;
       case 'Crescent Moon':
-        return `M ${-hw*0.25} ${-hh} A ${hw} ${hh} 0 0 1 ${-hw*0.25} ${hh} A ${hw*0.5} ${hh} 0 0 0 ${-hw*0.25} ${-hh} Z`;
+        return `M ${-hw} ${-hh} A ${hw * CRESCENT_OUTER} ${hh} 0 0 1 ${-hw} ${hh} A ${hw * CRESCENT_INNER} ${hh} 0 0 0 ${-hw} ${-hh} Z`;
       case 'Round Brilliant':
       default: return `M 0 ${-hw} A ${hw} ${hw} 0 1 1 0 ${hw} A ${hw} ${hw} 0 1 1 0 ${-hw}`;
     }
@@ -2844,9 +3140,31 @@ function App() {
             <h1 className="text-[15px] font-semibold tracking-tight">
               MikeyTime <span className="font-normal text-gray-400">Ring Studio</span>
             </h1>
+            <span className="text-[10px] font-mono tabular text-gray-400 ring-1 ring-white/15 rounded px-1.5 py-0.5" title="App version">v{APP_VERSION}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
+              <button
+                onClick={undo}
+                disabled={historyCounts.undo === 0 && (historyRef.current.presentKey === null || designKey === historyRef.current.presentKey)}
+                title="Undo (Ctrl/⌘+Z)"
+                aria-label="Undo"
+                className="flex items-center px-2.5 py-1.5 text-gray-200 hover:bg-white/10 disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={redo}
+                disabled={historyCounts.redo === 0}
+                title="Redo (Ctrl/⌘+Shift+Z)"
+                aria-label="Redo"
+                className="flex items-center px-2.5 py-1.5 text-gray-200 hover:bg-white/10 disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
             <div className="flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
               <button onClick={handleExportConfig} title="Save this design as a file" className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-200 hover:bg-white/10 transition-colors">
                 <Download className="w-3.5 h-3.5" /> Save
@@ -3040,7 +3358,7 @@ function App() {
                 // Top-down shading for the band's cross-section, using the same
                 // profile as the 3D model (light comes from the top of the view).
                 const halfBW = (Number(bandWidth) || 0) / 2;
-                const prof = getBandProfile(bandProfile, halfBW, Math.max(1.2, Number(bandThickness) || 1.8));
+                const prof = getBandProfile(bandProfile, halfBW, Math.max(1.2, Number(bandThickness) || 1.8), bandProfileSize);
                 const x0 = -svgWidthMM / 2;
                 if (bandProfile === 'bevel') {
                   const b = prof.edge;
@@ -3500,7 +3818,7 @@ function App() {
                           key={bp.id}
                           role="radio"
                           aria-checked={bandProfile === bp.id}
-                          onClick={() => setBandProfile(bp.id)}
+                          onClick={() => { if (bp.id !== bandProfile) { setBandProfile(bp.id); setBandProfileSize(null); } }}
                           className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-xs font-semibold transition-all ${
                             bandProfile === bp.id ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-gray-500 hover:text-gray-800'
                           }`}
@@ -3516,10 +3834,49 @@ function App() {
                       ))}
                     </div>
                   </div>
+                  {bandProfile !== 'flat' && (() => {
+                    const halfBW = (Number(bandWidth) || 4) / 2;
+                    const thick = Math.max(1.2, Number(bandThickness) || 1.8);
+                    const auto = getAutoProfileSize(bandProfile, halfBW, thick);
+                    const maxSize = getMaxProfileSize(bandProfile, halfBW, thick);
+                    const isAuto = bandProfileSize === null || bandProfileSize === '';
+                    const shown = isAuto ? Number(auto.toFixed(2)) : bandProfileSize;
+                    const isCapped = !isAuto && Number(bandProfileSize) > maxSize + 1e-9;
+                    return (
+                      <div className="flex flex-col gap-1 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                        <ControlSlider
+                          label={`${bandProfile === 'bevel' ? 'Bevel Width' : 'Dome Height'}${isAuto ? ' (auto)' : ''}`}
+                          value={shown}
+                          min={0.1}
+                          max={Number(maxSize.toFixed(2))}
+                          step={0.05}
+                          onChange={setBandProfileSize}
+                          unit="mm"
+                        />
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                          <span>
+                            {isCapped
+                              ? `Limited to ${maxSize.toFixed(2)} mm on this band.`
+                              : bandProfile === 'bevel' ? 'Width of each 45° chamfer.' : 'How far the dome drops at the edges.'}
+                          </span>
+                          {!isAuto && (
+                            <button onClick={() => setBandProfileSize(null)} className="font-semibold text-emerald-700 hover:text-emerald-800 underline">
+                              Auto
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <ControlSlider label="US Ring Size" value={ringSize} min={3} max={15} step={0.25} onChange={setRingSize} unit="US" />
                   <ControlSlider label="Band Thickness" value={bandThickness} min={1.2} max={4.0} step={0.1} onChange={setBandThickness} unit="mm" />
                   <ControlSlider label="Gem Relief Height (0 = Flush)" value={gemRelief} min={0.0} max={3.5} step={0.1} onChange={setGemRelief} unit="mm" />
                   <ControlSlider label="Carved Socket Depth" value={pocketDepthInput} min={0.2} max={1.5} step={0.05} onChange={setPocketDepthInput} unit="mm" />
+                  {Number(pocketDepthInput) > Math.max(1.2, Number(bandThickness) || 1.8) * 0.72 + 0.005 && (
+                    <p className="-mt-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                      Sockets are capped at {(Math.max(1.2, Number(bandThickness) || 1.8) * 0.72).toFixed(2)} mm (72% of the band thickness) so the band stays intact.
+                    </p>
+                  )}
 
                   <div className="bg-gray-50 p-2.5 border border-gray-200 rounded-lg mt-0.5 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
@@ -3748,6 +4105,24 @@ function App() {
                     <div className={`bg-white rounded-xl p-4 shadow-sm border transition-all flex flex-col gap-4 relative overflow-hidden ${isLinked ? 'border-emerald-200 bg-emerald-50/10' : 'border-gray-200 hover:border-emerald-300'}`}>
                       {isLinked && (
                         <div className="absolute inset-0 bg-gray-50/40 z-10 pointer-events-none" />
+                      )}
+
+                      {(ring3DData.stoneNotes?.[stone.id] || []).length > 0 && (
+                        <ul className="flex flex-col gap-1.5" aria-label={`Notes for stone ${index + 1}`}>
+                          {ring3DData.stoneNotes[stone.id].map((note, nIdx) => (
+                            <li
+                              key={nIdx}
+                              className={`flex items-start gap-2 text-[11px] leading-snug rounded-md px-2.5 py-1.5 border ${
+                                note.level === 'warn'
+                                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                                  : 'bg-gray-50 border-gray-200 text-gray-600'
+                              }`}
+                            >
+                              <AlertCircle className={`w-3.5 h-3.5 mt-px shrink-0 ${note.level === 'warn' ? 'text-amber-600' : 'text-gray-400'}`} />
+                              <span>{note.text}</span>
+                            </li>
+                          ))}
+                        </ul>
                       )}
 
                       <div className="grid grid-cols-3 gap-2">
