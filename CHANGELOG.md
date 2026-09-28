@@ -3,10 +3,11 @@
 ## v1.4.0
 
 ### New
-- **Real stone proportions in 3D.** Every stone is built with its cut's standard depth as a share of its width (Princess 70%, Asscher 68%, Radiant 67%, Cushion 66%, Emerald 65%, Oval 62%, Round 61.5%, Pear and Marquise 61%, Heart 60%; Hexagon 65% and Crescent Moon 60% are estimates). The depth is split into a crown (15%), girdle (3%) and a pavilion cone (82%) narrowing to the culet, so stones look like cut gems instead of thin plates. A 6.4 mm round is 3.94 mm deep.
+- **Real stone proportions in 3D.** Every stone is built with its cut's standard depth as a share of its width (Princess 70.4%, Asscher 68.1%, Radiant 67%, Cushion 65.9%, Emerald 65%, Hexagon 63.2%, Oval 62.1%, Round 61.3%, Pear and Marquise 61.2–61.3%, Heart 60%; Crescent Moon 60% is an estimate). The depth is split into a crown (15%), girdle (3%) and a pavilion cone (82%) narrowing to the culet, so stones look like cut gems instead of thin plates. A 6.4 mm round is 3.94 mm deep.
 - **Stone Depth** (3D Print Settings): scale all stones from 60% to 140% of their standard depth, or set a single stone's depth in millimetres.
 - **Setting Height** replaces Gem Relief Height. It sets how high each stone's girdle sits above the band. On Auto, each stone sinks as deep into its socket as the Max Socket Depth allows and its setting raises it the rest of the way, so small stones sit low and large stones sit up on taller prongs like a real head. You can also set it for all stones or per stone.
 - **Stone cards** show each stone's width × length × depth and how high its girdle sits above the band.
+- **Carat sizing.** Each stone's Size can be Manual width or Carat. Carat picks from 0.25 ct to 3.00 ct and uses standard diamond measurements (length × width × depth) for every cut except Crescent Moon, which has no standard chart. The BOM lists carat-sized stones with their weight. Sizes are for diamond; other gemstones of the same carat weight are slightly different sizes.
 
 ### Improved
 - Sockets are cut to the pavilion's cross-section where it meets the band, so the stone's cone seats into the band. Stones wider than the band are raised just enough for that cross-section to fit between the band's rims.
@@ -15,6 +16,7 @@
 - "Carved Socket Depth" is now "Max Socket Depth", the deepest a stone may sink into the band.
 - The bill of materials lists each stone as width × length × depth, with its girdle height above the band and actual socket depth.
 - **Pear and Marquise** now fill their full stated width (they were about 14% and 18% narrower).
+- **Standard proportions from the carat chart.** Each cut's automatic depth is the chart's average depth ÷ width, and length-to-width ratios now match it: Marquise 2.0 (was 1.8), Pear 1.55 (was 1.5), Heart 1.0 (was 0.9), Radiant 1.32 (was 1.3). Hexagon width is now measured flat-to-flat like the chart (its point-to-point length is 1.155 × that), which also corrects hexagon depth (a 1 ct hexagon was 4.4 mm deep; it is now 3.7 mm). Saved designs using these shapes will look slightly different.
 
 ### Fixed
 - Rare mesh defects where a socket corner or edge lined up almost exactly with the band's grid. Tested watertight across 4,500 random designs plus fixed sweeps of every shape, size, offset, rotation and band profile.

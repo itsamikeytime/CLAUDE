@@ -128,20 +128,59 @@ const PRESET_STONES = {
   'Turquoise': '#40e0d0', 'Jade': '#00a86b'
 };
 
+// Length ÷ width per cut, matching standard proportions (see CARAT_SIZES).
+// Hexagon width is measured flat-to-flat, so its point-to-point length is
+// 2/sqrt(3) of it (a regular hexagon).
 const SHAPE_RATIOS = {
   'Round Brilliant': 1, 'Oval': 1.4, 'Cushion': 1,
-  'Emerald': 1.4, 'Princess': 1, 'Pear': 1.5,
-  'Radiant': 1.3, 'Marquise': 1.8, 'Asscher': 1,
-  'Heart': 0.905, 'Crescent Moon': 1.355, 'Hexagon': 1.0
+  'Emerald': 1.4, 'Princess': 1, 'Pear': 1.55,
+  'Radiant': 1.32, 'Marquise': 2.0, 'Asscher': 1,
+  'Heart': 1.0, 'Crescent Moon': 1.355, 'Hexagon': 2 / Math.sqrt(3)
 };
 
 // Standard total depth (table to culet) as a fraction of the stone's width,
-// per cut (industry ideal-cut ranges). Hexagon and Crescent Moon have no
-// common standard; 65% and 60% are estimates in line with similar cuts.
+// per cut: the average depth ÷ width across CARAT_SIZES below (hexagon width
+// is flat-to-flat). Crescent Moon has no standard chart; 60% is an estimate
+// in line with the other spread cuts (heart, pear).
 const CUT_DEPTH = {
-  'Round Brilliant': 0.615, 'Princess': 0.70, 'Cushion': 0.66, 'Asscher': 0.68,
-  'Heart': 0.60, 'Oval': 0.62, 'Emerald': 0.65, 'Radiant': 0.67,
-  'Pear': 0.61, 'Marquise': 0.61, 'Hexagon': 0.65, 'Crescent Moon': 0.60
+  'Round Brilliant': 0.613, 'Princess': 0.704, 'Cushion': 0.659, 'Asscher': 0.681,
+  'Heart': 0.60, 'Oval': 0.621, 'Emerald': 0.65, 'Radiant': 0.67,
+  'Pear': 0.612, 'Marquise': 0.613, 'Hexagon': 0.632, 'Crescent Moon': 0.60
+};
+
+// Standard diamond sizes by carat weight: [length, width, depth] in mm for
+// 0.25 ct to 3.00 ct in 0.25 ct steps. Width runs along the ring, length
+// across it (hexagon: width flat-to-flat, length point-to-point). Other
+// gemstones differ in density, so the same carat weight is a slightly
+// different size for them.
+const CARAT_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3];
+const CARAT_SIZES = {
+  'Round Brilliant': [[4.1,4.1,2.5],[5.1,5.1,3.1],[5.8,5.8,3.6],[6.4,6.4,3.9],[6.9,6.9,4.2],[7.4,7.4,4.6],[7.8,7.8,4.8],[8.1,8.1,5.0],[8.5,8.5,5.2],[8.8,8.8,5.4],[9.0,9.0,5.5],[9.3,9.3,5.7]],
+  'Hexagon': [[4.3,3.7,2.3],[5.4,4.7,3.0],[6.2,5.4,3.4],[6.8,5.9,3.7],[7.3,6.3,4.0],[7.8,6.8,4.3],[8.2,7.1,4.5],[8.6,7.4,4.7],[8.9,7.7,4.9],[9.2,8.0,5.0],[9.5,8.2,5.2],[9.8,8.5,5.4]],
+  'Princess': [[3.5,3.5,2.5],[4.4,4.4,3.1],[5.0,5.0,3.5],[5.5,5.5,3.9],[6.0,6.0,4.2],[6.4,6.4,4.5],[6.7,6.7,4.7],[7.0,7.0,4.9],[7.3,7.3,5.1],[7.5,7.5,5.3],[7.8,7.8,5.5],[8.0,8.0,5.6]],
+  'Cushion': [[3.8,3.8,2.5],[4.6,4.6,3.0],[5.3,5.3,3.5],[5.8,5.8,3.8],[6.2,6.2,4.1],[6.6,6.6,4.4],[7.0,7.0,4.6],[7.3,7.3,4.8],[7.7,7.7,5.1],[8.0,8.0,5.3],[8.2,8.2,5.4],[8.5,8.5,5.6]],
+  'Asscher': [[3.5,3.5,2.4],[4.4,4.4,3.0],[5.0,5.0,3.4],[5.5,5.5,3.7],[6.0,6.0,4.1],[6.3,6.3,4.3],[6.7,6.7,4.6],[7.0,7.0,4.8],[7.3,7.3,5.0],[7.5,7.5,5.1],[7.8,7.8,5.3],[8.0,8.0,5.4]],
+  'Heart': [[4.1,4.1,2.5],[5.2,5.2,3.1],[5.9,5.9,3.5],[6.5,6.5,3.9],[7.0,7.0,4.2],[7.5,7.5,4.5],[7.8,7.8,4.7],[8.2,8.2,4.9],[8.5,8.5,5.1],[8.8,8.8,5.3],[9.1,9.1,5.5],[9.4,9.4,5.6]],
+  'Oval': [[5.0,3.6,2.2],[6.3,4.5,2.8],[7.2,5.1,3.2],[7.9,5.6,3.5],[8.5,6.0,3.7],[9.0,6.4,4.0],[9.5,6.8,4.2],[10.0,7.1,4.4],[10.4,7.4,4.6],[10.8,7.7,4.8],[11.2,8.0,5.0],[11.6,8.3,5.1]],
+  'Emerald': [[4.4,3.1,2.0],[5.5,4.0,2.6],[6.3,4.5,2.9],[7.0,5.0,3.3],[7.5,5.4,3.5],[8.0,5.7,3.7],[8.4,6.0,3.9],[8.7,6.3,4.1],[9.1,6.5,4.2],[9.4,6.8,4.4],[9.7,7.0,4.6],[10.0,7.2,4.7]],
+  'Radiant': [[4.3,3.2,2.1],[5.4,4.1,2.7],[6.2,4.7,3.1],[6.8,5.2,3.5],[7.3,5.6,3.8],[7.8,5.9,4.0],[8.2,6.2,4.2],[8.5,6.5,4.4],[8.9,6.8,4.6],[9.2,7.0,4.7],[9.5,7.2,4.8],[9.8,7.5,5.0]],
+  'Pear': [[5.3,3.4,2.1],[6.8,4.4,2.7],[7.8,5.0,3.1],[8.7,5.6,3.4],[9.3,6.0,3.7],[9.9,6.4,3.9],[10.4,6.7,4.1],[10.9,7.0,4.3],[11.4,7.3,4.5],[11.8,7.6,4.6],[12.2,7.9,4.8],[12.6,8.1,4.9]],
+  'Marquise': [[6.4,3.2,2.0],[8.2,4.1,2.5],[9.4,4.7,2.9],[10.4,5.2,3.2],[11.2,5.6,3.4],[11.9,6.0,3.7],[12.5,6.3,3.8],[13.1,6.5,4.0],[13.6,6.8,4.1],[14.1,7.0,4.3],[14.6,7.3,4.5],[15.0,7.5,4.6]]
+};
+const hasCaratSizes = (shape) => !!CARAT_SIZES[shape];
+
+// A stone's size in mm. Carat mode reads the standard chart (including its
+// depth); manual mode uses the typed width, the cut's length ratio, and
+// leaves depth to the cut's standard percentage.
+const getStoneSize = (stone) => {
+  const shape = stone.shape || 'Round Brilliant';
+  if (stone.sizeMode === 'carat' && hasCaratSizes(shape)) {
+    const carat = CARAT_STEPS.includes(Number(stone.carat)) ? Number(stone.carat) : 1;
+    const [length, width, depth] = CARAT_SIZES[shape][CARAT_STEPS.indexOf(carat)];
+    return { width, length, chartDepth: depth, carat };
+  }
+  const width = Number(stone.width) || 0;
+  return { width, length: width * (SHAPE_RATIOS[shape] || 1), chartDepth: null, carat: null };
 };
 // Table facet width as a fraction of the stone's outline: step cuts carry a
 // wider table than brilliant cuts.
@@ -334,7 +373,7 @@ const getShapeOutlinePoints = (shape, hw, hh, steps = 96) => {
     );
   }
   if (shape === 'Hexagon') {
-    const sx = hw * 0.866025;
+    const sx = hw; // flat sides sit at the stated width (flat-to-flat)
     return buildPolygon(
       [
         { x: 0, y: -hh, miterLimit: 1.28 }, { x: sx, y: -hh * 0.5, miterLimit: 1.28 },
@@ -666,7 +705,7 @@ const getProngPositions = (style, shape, hw, hh) => {
     if (shape === 'Heart') return [heartSpot(hw, hh, 0.62), heartSpot(hw, hh, -0.62), heartSpot(hw, hh, 2.25), heartSpot(hw, hh, -2.25)];
     if (shape === 'Crescent Moon') return [crescentSpot(hw, hh, 0.1, 0.45), crescentSpot(hw, hh, 0.9, 0.45), crescentSpot(hw, hh, 0.4, 0.1), crescentSpot(hw, hh, 0.6, 0.1)];
     if (shape === 'Hexagon') {
-      const sx = hw * 0.866025;
+      const sx = hw; // flat sides sit at the stated width (flat-to-flat)
       return [{ x: -sx, y: -hh * 0.6 }, { x: sx, y: -hh * 0.6 }, { x: -sx, y: hh * 0.6 }, { x: sx, y: hh * 0.6 }];
     }
     if (['Emerald', 'Radiant', 'Asscher', 'Cushion', 'Princess'].includes(shape)) {
@@ -691,7 +730,7 @@ const getProngPositions = (style, shape, hw, hh) => {
       ];
     }
     if (shape === 'Hexagon') {
-      const sx = hw * 0.866025;
+      const sx = hw; // flat sides sit at the stated width (flat-to-flat)
       return [
         { x: 0, y: -hh * 0.95 }, { x: sx * 0.95, y: -hh * 0.475 }, { x: sx * 0.95, y: hh * 0.475 },
         { x: 0, y: hh * 0.95 }, { x: -sx * 0.95, y: hh * 0.475 }, { x: -sx * 0.95, y: -hh * 0.475 }
@@ -742,7 +781,7 @@ const getVProngData = (shape, hw, hh) => {
   }
 
   if (shape === 'Hexagon') {
-    const sx = hw * 0.866025;
+    const sx = hw; // flat sides sit at the stated width (flat-to-flat)
     return {
       chevrons: [
         { a: { x: -sx * 0.32, y: -hh + hh * 0.16 }, v: { x: 0, y: -hh }, b: { x: sx * 0.32, y: -hh + hh * 0.16 } },
@@ -1080,7 +1119,7 @@ const build3DRingShells = ({
     const w = Number(stone.width) || 4;
     const shape = stone.shape || 'Round Brilliant';
     const ratio = SHAPE_RATIOS[shape] || 1;
-    const h = w * ratio;
+    const h = isSetNumber(stone.length) ? Number(stone.length) : w * ratio;
     const hw = w / 2;
     const hh = h / 2;
     const rot = Number(stone.rotation) || 0;
@@ -1096,7 +1135,13 @@ const build3DRingShells = ({
     const stonePocketDepth = Math.min(thickness * 0.78, Math.max(0.2, resolvedPocketDepthRaw));
 
     // ---- Stone proportions (real cut depths, see CUT_DEPTH) --------------
-    const depth = getStoneDepth(shape, w, stoneDepthPct, uniqueStone3D ? stone.depthOverride : null);
+    // Carat-sized stones take their depth from the chart (scaled by the
+    // global Stone Depth %); a per-stone depth still wins over both.
+    const depth = (uniqueStone3D && isSetNumber(stone.depthOverride) && Number(stone.depthOverride) > 0)
+      ? Number(stone.depthOverride)
+      : isSetNumber(stone.chartDepth)
+        ? Number(stone.chartDepth) * ((Number(stoneDepthPct) || 100) / 100)
+        : getStoneDepth(shape, w, stoneDepthPct);
     const crownH = depth * STONE_PROPORTIONS.crown;
     const girdleT = depth * STONE_PROPORTIONS.girdle;
     const pavH = depth * STONE_PROPORTIONS.pavilion;
@@ -1232,10 +1277,10 @@ const build3DRingShells = ({
       hasSocket,
       overlapsBand: vMin < seatHalfV && vMax > -seatHalfV,
       culetOnBand,
-      // A crescent's socket thins to nothing at its horns, where a grid point
-      // can sit within snapping distance of both sides; it is traced without
-      // snapping instead.
-      snapToContour: !isCrescent,
+      // A crescent's horns and a heart's notch thin to nothing, where a grid
+      // point can sit within snapping distance of both sides; those sockets
+      // are traced without snapping instead.
+      snapToContour: !isCrescent && shape !== 'Heart',
       outlinePts,
       culetPts2D: culetWorld.map(toLocal),
       cutContourUV,
@@ -1576,12 +1621,30 @@ const build3DRingShells = ({
     pushBandTri(out2Bot, in1Bot, in2Bot, 'band');
   }
 
+  // Where grid cells collapse onto the same socket corner, the same triangle
+  // can be emitted more than once, folding back over itself. Copies of one
+  // triangle cancel in pairs; an odd one out is kept once.
+  const triKey = (t) => [t.v1, t.v2, t.v3]
+    .map(p => `${Math.fround(p.x)},${Math.fround(p.y)},${Math.fround(p.z)}`)
+    .sort()
+    .join('|');
+  const triCounts = new Map();
+  bandTris.forEach((t) => { const k = triKey(t); triCounts.set(k, (triCounts.get(k) || 0) + 1); });
+  const keptOnce = new Set();
+  const cleanBandTris = bandTris.filter((t) => {
+    const k = triKey(t);
+    if (triCounts.get(k) % 2 === 0) return false;
+    if (keptOnce.has(k)) return false;
+    keptOnce.add(k);
+    return true;
+  });
+
   shells.push({
     name: 'Part_01_Ring_Band_With_Sockets',
     role: 'Band (Single Watertight Shell)',
     color: METAL_COLORS[bandColor]?.hex || '#d4af37',
     isMetal: true,
-    triangles: bandTris
+    triangles: cleanBandTris
   });
 
   // Faceted gem/prong-ball builder: uses ONE flat frame centered on the
@@ -2777,7 +2840,7 @@ function App() {
       shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
       width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
       haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
-      settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
+      sizeMode: 'width', carat: 1, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
     },
   ]);
 
@@ -2890,7 +2953,7 @@ function App() {
           shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
           width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
           haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
-          settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
+          sizeMode: 'width', carat: 1, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
         }];
       }
 
@@ -2917,6 +2980,8 @@ function App() {
           haloColor: lastStone.haloColor || PRESET_STONES['Diamond'],
           haloUniqueStones: lastStone.haloUniqueStones || false,
           haloOverrides: lastStone.haloOverrides || {},
+          sizeMode: lastStone.sizeMode || 'width',
+          carat: lastStone.carat ?? 1,
           settingHeightOverride: lastStone.settingHeightOverride ?? '',
           depthOverride: lastStone.depthOverride ?? '',
           pocketDepthOverride: lastStone.pocketDepthOverride ?? ''
@@ -3028,6 +3093,8 @@ function App() {
             bezelColor: target.bezelColor,
             bezelSize: target.bezelSize,
             width: target.width,
+            sizeMode: target.sizeMode,
+            carat: target.carat,
             heightOffset: target.heightOffset,
             rotation: (360 - (target.rotation || 0)) % 360,
             gap: target.gap,
@@ -3045,6 +3112,11 @@ function App() {
         }
       }
       return stone;
+    }).map((stone) => {
+      // Resolve every stone's real size once (manual width or carat chart),
+      // so the 2D drawing, 3D model, overlays and BOM all agree.
+      const size = getStoneSize(stone);
+      return { ...stone, width: size.width, length: size.length, chartDepth: size.chartDepth };
     });
   }, [stones]);
 
@@ -3183,15 +3255,17 @@ function App() {
 
     effectiveStones.forEach((stone, i) => {
       const w = Number(stone.width) || 0;
-      const h = w * (SHAPE_RATIOS[stone.shape] || 1);
+      const h = Number(stone.length) || w * (SHAPE_RATIOS[stone.shape] || 1);
       const role = layoutMode === 'cluster' ? (i === 0 ? 'center anchor' : `${stone.side} side`) : 'scatter row';
       const info = ring3DData.stoneInfo?.[stone.id] || {};
-      const depthMM = info.depth ?? getStoneDepth(stone.shape, w, stoneDepthPct, uniqueStone3D ? stone.depthOverride : null);
+      const depthMM = info.depth ?? (isSetNumber(stone.chartDepth) ? stone.chartDepth * stoneDepthPct / 100 : getStoneDepth(stone.shape, w, stoneDepthPct));
       const setting = stone.settingStyle === 'Bezel'
         ? `Bezel ${mm(stone.bezelSize || 0.5)} mm, ${stone.bezelColor || bandColor}`
         : stone.settingStyle === 'Halo' ? `Halo (${mm(stone.haloSize || 1)} mm stones)` : stone.settingStyle;
       rows.push([
-        `Stone ${i + 1}`, 1, `Stone (${role})`, stone.shape, `${mm(w)} × ${mm(h)} × ${mm(depthMM)}`,
+        `Stone ${i + 1}`, 1, `Stone (${role})`,
+        stone.sizeMode === 'carat' && hasCaratSizes(stone.shape) ? `${stone.shape} (${Number(stone.carat).toFixed(2)} ct)` : stone.shape,
+        `${mm(w)} × ${mm(h)} × ${mm(depthMM)}`,
         stone.colorMode === 'preset' ? stone.preset : `Custom ${stone.color}`,
         setting,
         info.isFlush ? 'Flush' : mm(Math.max(0, info.girdleHeight ?? 0)),
@@ -3239,7 +3313,7 @@ function App() {
       }
       case 'Princess': return `M ${-hw} ${-hh} H ${hw} V ${hh} H ${-hw} Z`;
       case 'Hexagon': {
-        const sx = hw * 0.866025;
+        const sx = hw; // flat sides sit at the stated width (flat-to-flat)
         return `M 0 ${-hh} L ${sx} ${-hh*0.5} L ${sx} ${hh*0.5} L 0 ${hh} L ${-sx} ${hh*0.5} L ${-sx} ${-hh*0.5} Z`;
       }
       case 'Pear':
@@ -3654,8 +3728,7 @@ function App() {
               {renderedStones.map((stone) => {
                 const w = Number(stone.width) || 0;
                 const shape = stone.shape || 'Round Brilliant';
-                const ratio = SHAPE_RATIOS[shape] || 1;
-                const h = w * ratio;
+                const h = Number(stone.length) || w * (SHAPE_RATIOS[shape] || 1);
                 const hw = w / 2;
                 const hh = h / 2;
                 const rotation = Number(stone.rotation) || 0;
@@ -3724,7 +3797,7 @@ function App() {
                 })}
 
                 {showWidth && (() => {
-                  const maxY = renderedStones.length > 0 ? Math.max(...renderedStones.map(s => s.y + (s.width * (SHAPE_RATIOS[s.shape] || 1)) / 2)) : 0;
+                  const maxY = renderedStones.length > 0 ? Math.max(...renderedStones.map(s => s.y + (s.length) / 2)) : 0;
                   const bandBottom = Number(bandWidth) / 2;
                   const widthMeasY = Math.max(bandBottom, maxY) + 3.2;
 
@@ -3739,7 +3812,7 @@ function App() {
                       boxH: measTextSize * 1.45 + 0.2,
                       leftX: stone.x - spanW / 2,
                       rightX: stone.x + spanW / 2,
-                      gemBottom: stone.y + (stone.width * (SHAPE_RATIOS[stone.shape] || 1)) / 2
+                      gemBottom: stone.y + (stone.length) / 2
                     };
                   }).sort((a, b) => a.x - b.x);
 
@@ -3795,8 +3868,8 @@ function App() {
                     const gap = leftEdge2 - rightEdge1;
                     const midX = (rightEdge1 + leftEdge2) / 2;
 
-                    const y1 = s1.y - (s1.width * (SHAPE_RATIOS[s1.shape] || 1)) / 2;
-                    const y2 = s2.y - (s2.width * (SHAPE_RATIOS[s2.shape] || 1)) / 2;
+                    const y1 = s1.y - (s1.length) / 2;
+                    const y2 = s2.y - (s2.length) / 2;
                     const baseMidY = Math.min(y1, y2) - 3.2;
 
                     const textStr = `${gap.toFixed(1)}mm`;
@@ -4357,7 +4430,7 @@ function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {effectiveStones.map((stone, index) => {
                 const isLinked = !!stones[index].linkedTo;
-                const haloData = stone.settingStyle === 'Halo' ? getHaloData(stone.shape, stone.width/2, (stone.width*(SHAPE_RATIOS[stone.shape]||1))/2, stone.haloSize||1.0) : null;
+                const haloData = stone.settingStyle === 'Halo' ? getHaloData(stone.shape, stone.width/2, stone.length/2, stone.haloSize||1.0) : null;
 
                 return (
                   <div key={stone.id} className="flex flex-col gap-1.5 relative">
@@ -4405,7 +4478,7 @@ function App() {
                       {ring3DData.stoneInfo?.[stone.id] && (() => {
                         const info = ring3DData.stoneInfo[stone.id];
                         const w = Number(stone.width) || 0;
-                        const h = w * (SHAPE_RATIOS[stone.shape] || 1);
+                        const h = Number(stone.length) || w;
                         return (
                           <p className="text-[11px] text-gray-500 font-mono tabular -mb-1">
                             {w.toFixed(2)} × {h.toFixed(2)} × {info.depth.toFixed(2)} mm
@@ -4595,8 +4668,64 @@ function App() {
                         </div>
                       )}
 
+                      {(() => {
+                        const caratAvailable = hasCaratSizes(stone.shape);
+                        const isCarat = stone.sizeMode === 'carat' && caratAvailable;
+                        const chart = CARAT_SIZES[stone.shape];
+                        const toCarat = () => {
+                          // Start from the chart weight closest to the current width.
+                          let best = 0;
+                          chart.forEach(([, cw], i) => { if (Math.abs(cw - stone.width) < Math.abs(chart[best][1] - stone.width)) best = i; });
+                          updateStone(index, { sizeMode: 'carat', carat: CARAT_STEPS[best] });
+                        };
+                        return (
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Size</span>
+                            <div role="radiogroup" aria-label={`Size mode for stone ${index + 1}`} className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 ${isLinked ? 'opacity-75' : ''}`}>
+                              <button
+                                role="radio"
+                                aria-checked={!isCarat}
+                                disabled={isLinked}
+                                onClick={() => { if (isCarat) updateStone(index, { sizeMode: 'width', width: stone.width }); }}
+                                className={`px-2.5 py-1 text-[10px] font-bold rounded uppercase transition-colors ${!isCarat ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              >
+                                Manual width
+                              </button>
+                              <button
+                                role="radio"
+                                aria-checked={isCarat}
+                                disabled={isLinked || !caratAvailable}
+                                title={caratAvailable ? 'Size from the standard diamond carat chart' : `No carat chart for ${stone.shape}`}
+                                onClick={() => { if (!isCarat) toCarat(); }}
+                                className={`px-2.5 py-1 text-[10px] font-bold rounded uppercase transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isCarat ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                              >
+                                Carat
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       <div className="grid grid-cols-3 gap-3 pt-2">
-                        <CompactControl label="Width" value={stone.width} min={1} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { width: v })} />
+                        {stone.sizeMode === 'carat' && hasCaratSizes(stone.shape) ? (
+                          <div className="flex flex-col gap-1.5">
+                            <label htmlFor={`carat-${stone.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Carat</label>
+                            <select
+                              id={`carat-${stone.id}`}
+                              disabled={isLinked}
+                              value={String(CARAT_STEPS.includes(Number(stones[index].carat)) ? Number(stones[index].carat) : 1)}
+                              onChange={(e) => updateStone(index, { carat: Number(e.target.value) })}
+                              className="w-full text-[11px] border border-gray-200 rounded text-gray-700 py-1 px-1 bg-gray-50 focus:ring-1 focus:ring-emerald-500 outline-none font-mono disabled:opacity-75"
+                            >
+                              {CARAT_STEPS.map((ct, i) => {
+                                const [cl, cw] = CARAT_SIZES[stone.shape][i];
+                                return <option key={ct} value={String(ct)} title={`${cw} × ${cl} mm`}>{ct.toFixed(2)} ct</option>;
+                              })}
+                            </select>
+                          </div>
+                        ) : (
+                          <CompactControl label="Width" value={stone.width} min={1} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { width: v })} />
+                        )}
                         <CompactControl label="Y-Offset" value={stone.heightOffset} min={-15} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { heightOffset: v })} />
                         <CompactControl label="Rot (deg)" value={stone.rotation} min={0} max={360} step={1} disabled={isLinked} onChange={(v) => updateStone(index, { rotation: v })} />
                       </div>
