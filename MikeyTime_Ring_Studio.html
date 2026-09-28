@@ -108,7 +108,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.4.0';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -133,6 +133,34 @@ const SHAPE_RATIOS = {
   'Emerald': 1.4, 'Princess': 1, 'Pear': 1.5,
   'Radiant': 1.3, 'Marquise': 1.8, 'Asscher': 1,
   'Heart': 0.905, 'Crescent Moon': 1.355, 'Hexagon': 1.0
+};
+
+// Standard total depth (table to culet) as a fraction of the stone's width,
+// per cut (industry ideal-cut ranges). Hexagon and Crescent Moon have no
+// common standard; 65% and 60% are estimates in line with similar cuts.
+const CUT_DEPTH = {
+  'Round Brilliant': 0.615, 'Princess': 0.70, 'Cushion': 0.66, 'Asscher': 0.68,
+  'Heart': 0.60, 'Oval': 0.62, 'Emerald': 0.65, 'Radiant': 0.67,
+  'Pear': 0.61, 'Marquise': 0.61, 'Hexagon': 0.65, 'Crescent Moon': 0.60
+};
+// Table facet width as a fraction of the stone's outline: step cuts carry a
+// wider table than brilliant cuts.
+const CUT_TABLE = {
+  'Emerald': 0.65, 'Asscher': 0.62, 'Princess': 0.66, 'Radiant': 0.62,
+  'Cushion': 0.60, 'Hexagon': 0.62, 'Crescent Moon': 0.55
+};
+// Vertical split of a stone's total depth: crown (sloped top), girdle (rim
+// the prongs grip), pavilion (the cone below the girdle down to the culet).
+const STONE_PROPORTIONS = { crown: 0.15, girdle: 0.03, pavilion: 0.82 };
+
+const isSetNumber = (v) => v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
+
+// Total depth of a stone: its own override in mm if set, else the cut's
+// standard depth for its width scaled by the global depth percentage.
+const getStoneDepth = (shape, width, depthPct = 100, overrideMM = null) => {
+  if (isSetNumber(overrideMM) && Number(overrideMM) > 0) return Number(overrideMM);
+  const w = Number(width) || 0;
+  return w * (CUT_DEPTH[shape] ?? 0.62) * ((Number(depthPct) || 100) / 100);
 };
 
 const SETTING_STYLES = ['None', 'Flush', '4-Prong', '6-Prong', 'Bezel', 'V-Prong', 'Halo'];
@@ -222,6 +250,11 @@ const CompactControl = ({ label, value, min, max, step = 0.25, onChange, disable
     />
   </div>
 );
+
+// Pear and Marquise sides are cubic curves whose widest point is 3/4 of the
+// control-point distance, so control points at 4/3 of the half-width make
+// the stone exactly as wide as its stated width.
+const SIDE_CURVE_REACH = 4 / 3;
 
 // Crescent Moon: a true crescent - a unit circle with an overlapping circle
 // (radius CRESCENT_BITE_R, centered CRESCENT_BITE_D to its left) cut away.
@@ -341,11 +374,11 @@ const getShapeOutlinePoints = (shape, hw, hh, steps = 96) => {
     } else if (shape === 'Pear') {
       if (i < half) {
         const bt = i / half, u = 1 - bt;
-        x = 3 * u * u * bt * (hw * 1.15) + 3 * u * bt * bt * (hw * 1.15);
+        x = 3 * u * u * bt * (hw * SIDE_CURVE_REACH) + 3 * u * bt * bt * (hw * SIDE_CURVE_REACH);
         y = u * u * u * (-hh) + 3 * u * u * bt * (-hh * 0.1) + 3 * u * bt * bt * (hh) + bt * bt * bt * (hh);
       } else {
         const bt = (i - half) / (steps - half), u = 1 - bt;
-        x = 3 * u * u * bt * (-hw * 1.15) + 3 * u * bt * bt * (-hw * 1.15);
+        x = 3 * u * u * bt * (-hw * SIDE_CURVE_REACH) + 3 * u * bt * bt * (-hw * SIDE_CURVE_REACH);
         y = u * u * u * (hh) + 3 * u * u * bt * (hh) + 3 * u * bt * bt * (-hh * 0.1) + bt * bt * bt * (-hh);
       }
       isCorner = i === 0;
@@ -353,11 +386,11 @@ const getShapeOutlinePoints = (shape, hw, hh, steps = 96) => {
     } else if (shape === 'Marquise') {
       if (i < half) {
         const bt = i / half, u = 1 - bt;
-        x = 3 * u * u * bt * (hw * 1.1) + 3 * u * bt * bt * (hw * 1.1);
+        x = 3 * u * u * bt * (hw * SIDE_CURVE_REACH) + 3 * u * bt * bt * (hw * SIDE_CURVE_REACH);
         y = u * u * u * (-hh) + 3 * u * u * bt * (-hh * 0.3) + 3 * u * bt * bt * (hh * 0.3) + bt * bt * bt * (hh);
       } else {
         const bt = (i - half) / (steps - half), u = 1 - bt;
-        x = 3 * u * u * bt * (-hw * 1.1) + 3 * u * bt * bt * (-hw * 1.1);
+        x = 3 * u * u * bt * (-hw * SIDE_CURVE_REACH) + 3 * u * bt * bt * (-hw * SIDE_CURVE_REACH);
         y = u * u * u * (hh) + 3 * u * u * bt * (hh * 0.3) + 3 * u * bt * bt * (-hh * 0.3) + bt * bt * bt * (-hh);
       }
       isCorner = i === 0 || i === half;
@@ -944,7 +977,8 @@ const build3DRingShells = ({
   bandColor,
   ringSize,
   bandThickness,
-  gemRelief,
+  settingHeight = null,
+  stoneDepthPct = 100,
   pocketDepthInput,
   uniqueStone3D,
   include3DSettings,
@@ -959,7 +993,6 @@ const build3DRingShells = ({
   const bw = Number(bandWidth) || 4;
   const halfW = bw / 2;
   const safeRimV = Math.max(0.2, halfW - 0.18);
-  const globalRelief = Number(gemRelief ?? 1.2);
   const globalPocketDepth = Math.min(thickness * 0.72, Math.max(0.2, Number(pocketDepthInput) || 0.75));
   const defaultRFloor = outerRadius - globalPocketDepth;
   const profile = getBandProfile(bandProfile, halfW, thickness, bandProfileSize);
@@ -1056,20 +1089,21 @@ const build3DRingShells = ({
 
     const outlinePts = getShapeOutlinePoints(shape, hw, hh, 96);
 
-    const resolvedRelief = (uniqueStone3D && stone.reliefOverride !== undefined && stone.reliefOverride !== null && stone.reliefOverride !== '')
-      ? Number(stone.reliefOverride)
-      : globalRelief;
-
-    const resolvedPocketDepthRaw = (uniqueStone3D && stone.pocketDepthOverride !== undefined && stone.pocketDepthOverride !== null && stone.pocketDepthOverride !== '')
+    const resolvedPocketDepthRaw = (uniqueStone3D && isSetNumber(stone.pocketDepthOverride))
       ? Number(stone.pocketDepthOverride)
       : globalPocketDepth;
-
+    // Deepest the stone may sink into the band (the socket depth limit).
     const stonePocketDepth = Math.min(thickness * 0.78, Math.max(0.2, resolvedPocketDepthRaw));
-    const stoneRFloor = surfR(stone.y) - stonePocketDepth;
 
-    const isFlushStone = stone.settingStyle === 'Flush' || resolvedRelief <= 0.01;
-    const effectiveRelief = stone.settingStyle === 'Flush' ? 0 : resolvedRelief;
-    const pocketCutScale = isFlushStone ? ((hw + 0.12) / Math.max(0.2, hw)) : 1.015;
+    // ---- Stone proportions (real cut depths, see CUT_DEPTH) --------------
+    const depth = getStoneDepth(shape, w, stoneDepthPct, uniqueStone3D ? stone.depthOverride : null);
+    const crownH = depth * STONE_PROPORTIONS.crown;
+    const girdleT = depth * STONE_PROPORTIONS.girdle;
+    const pavH = depth * STONE_PROPORTIONS.pavilion;
+    const style = stone.settingStyle || '4-Prong';
+    const heightOverride = uniqueStone3D && isSetNumber(stone.settingHeightOverride)
+      ? Number(stone.settingHeightOverride)
+      : (isSetNumber(settingHeight) ? Number(settingHeight) : null);
 
     const toWorldUV = (pt, scale = 1) => {
       const sx = pt.x * scale;
@@ -1082,34 +1116,26 @@ const build3DRingShells = ({
         isCorner: pt.isCorner
       };
     };
+    const toLocal = (p) => {
+      const du = p.u - stone.x, dv = p.v - stone.y;
+      return { x: du * cosR + dv * sinR, y: -du * sinR + dv * cosR };
+    };
 
-    // Socket + plug. When the stone fits across the band, the socket is the
-    // stone's outline (slightly enlarged) around its center, as before.
-    // Otherwise the plug - the part of the stone that sits down in the band -
-    // is a shrunken copy of the outline placed over the part of the stone
-    // that actually overlaps the band: an offset or angled stone, or a long
-    // marquise, keeps its plug on the band instead of centered on a stone
-    // middle that may hang off it. It is the largest copy that fits inside
-    // both the stone and the band while leaving a solid rim on each side.
+    // The band keeps a solid rim of at least rimMin on each side of a socket.
     const rimMin = Math.max(0.35, bw * 0.1);
     const seatHalfV = halfW - rimMin;
     const worldPts = outlinePts.map(pt => ({
       u: stone.x + (pt.x * cosR - pt.y * sinR),
-      v: stone.y + (pt.x * sinR + pt.y * cosR)
+      v: stone.y + (pt.x * sinR + pt.y * cosR),
+      isCorner: pt.isCorner
     }));
     const vMin = Math.min(...worldPts.map(p => p.v));
     const vMax = Math.max(...worldPts.map(p => p.v));
-
-    // Feasible plug-center heights (v) for scale s: the plug's v-extent
-    // c(1-s) + s*[vMin, vMax] must stay within the rims, and the center must
-    // lie inside the stone.
-    const plugCenterRange = (sc) => {
-      if (sc >= 1) return (vMin >= -seatHalfV && vMax <= seatHalfV) ? [vMin, vMax] : null;
-      const lo = Math.max(vMin, (-seatHalfV - sc * vMin) / (1 - sc));
-      const hi = Math.min(vMax, (seatHalfV - sc * vMax) / (1 - sc));
-      return lo <= hi ? [lo, hi] : null;
-    };
-    // Center of the stone's chord at height v (keeps the plug inside the stone).
+    const vExtentFits = (pts, clearance = 1.02, about = null) => pts.every((p) => {
+      const v = about ? about.v + (p.v - about.v) * clearance : p.v;
+      return v >= -seatHalfV - 1e-9 && v <= seatHalfV + 1e-9;
+    });
+    // Center of the stone's chord at height v (a point inside the stone).
     const chordMidU = (v) => {
       let uLo = Infinity, uHi = -Infinity;
       for (let i = 0; i < worldPts.length; i++) {
@@ -1121,41 +1147,81 @@ const build3DRingShells = ({
       }
       return Number.isFinite(uLo) ? (uLo + uHi) / 2 : stone.x;
     };
-
-    const fullRange = (vMin * pocketCutScale - stone.y * (pocketCutScale - 1) >= -seatHalfV &&
-      vMax * pocketCutScale - stone.y * (pocketCutScale - 1) <= seatHalfV);
-    let plugScale = 0;
-    let plugCenter = { u: stone.x, v: stone.y };
-    if (!fullRange) {
+    const bisect = (ok) => {
+      if (ok(1)) return 1;
       let lo = 0, hi = 1;
-      for (let step = 0; step < 30; step++) {
-        const mid = (lo + hi) / 2;
-        if (plugCenterRange(mid)) lo = mid; else hi = mid;
-      }
-      plugScale = lo;
-      const range = plugCenterRange(plugScale);
-      if (range) {
-        const cv = Math.max(range[0], Math.min(range[1], stone.y));
-        plugCenter = { u: chordMidU(cv), v: cv };
-      }
-    }
-    const isNarrowSeat = !fullRange;
-    const hasSocket = !isNarrowSeat || plugScale >= 0.2;
-    const plugAround = (k) => worldPts.map((p, i) => ({
-      u: plugCenter.u + (p.u - plugCenter.u) * k,
-      v: plugCenter.v + (p.v - plugCenter.v) * k,
-      isCorner: outlinePts[i].isCorner
-    }));
-    // The stone's root, in its own unrotated 2D frame, for the 3D builder.
-    const toLocal = (p) => {
-      const du = p.u - stone.x, dv = p.v - stone.y;
-      return { x: du * cosR + dv * sinR, y: -du * sinR + dv * cosR };
+      for (let step = 0; step < 30; step++) { const mid = (lo + hi) / 2; if (ok(mid)) lo = mid; else hi = mid; }
+      return lo;
     };
-    const plugRootPts2D = isNarrowSeat && hasSocket ? plugAround(plugScale * 0.985).map(toLocal) : null;
 
-    const cutContourUV = isNarrowSeat
-      ? plugAround(Math.max(plugScale, 0.2)).map(p => ({ ...p, v: Math.max(-safeRimV, Math.min(safeRimV, p.v)) }))
-      : outlinePts.map(pt => toWorldUV(pt, pocketCutScale));
+    // ---- Culet: the pavilion's point (a thin keel for a crescent) ---------
+    // It sits under the stone's center when that is over the band; an
+    // off-center stone gets its culet at the nearest point that is, so the
+    // pavilion still reaches down into the band.
+    const culetMargin = 0.15;
+    const cv = Math.max(-(seatHalfV - culetMargin), Math.min(seatHalfV - culetMargin, stone.y));
+    const culetOnBand = cv > vMin + 1e-6 && cv < vMax - 1e-6;
+    const isCrescent = shape === 'Crescent Moon';
+    const culetCenter = { u: (cv === stone.y && !isCrescent) ? stone.x : chordMidU(cv), v: cv };
+    let culetWorld;
+    if (isCrescent) {
+      const keel = insetStoneOutline(shape, outlinePts, 0.1).map(p => ({
+        u: stone.x + (p.x * cosR - p.y * sinR), v: stone.y + (p.x * sinR + p.y * cosR)
+      }));
+      const keelScale = bisect(k => vExtentFits(keel.map(p => ({ v: culetCenter.v + (p.v - culetCenter.v) * k })), 1.02, culetCenter));
+      culetWorld = keel.map(p => ({ u: culetCenter.u + (p.u - culetCenter.u) * keelScale, v: culetCenter.v + (p.v - culetCenter.v) * keelScale }));
+    } else {
+      culetWorld = worldPts.map(p => ({ u: culetCenter.u + (p.u - culetCenter.u) * 0.04, v: culetCenter.v + (p.v - culetCenter.v) * 0.04 }));
+    }
+    // Cross-section of the pavilion where it meets the band surface when a
+    // fraction f of the pavilion is sunk into the band (0 = culet, 1 = girdle).
+    const pavilionSection = (f) => worldPts.map((p, i) => ({
+      u: culetWorld[i].u + (p.u - culetWorld[i].u) * f,
+      v: culetWorld[i].v + (p.v - culetWorld[i].v) * f,
+      isCorner: p.isCorner
+    }));
+    const fFit = culetOnBand ? bisect(f => vExtentFits(pavilionSection(f), 1.02, culetCenter)) : 0;
+
+    // ---- Seat the stone ------------------------------------------------
+    // Heights (mm) are relative to the band surface under the stone's center.
+    const minGirdle = { 'None': 0, 'Bezel': 0.1, 'Halo': 0.2, 'Flush': 0.1 }[style] ?? 0.15;
+    const flushScale = (hw + 0.12) / Math.max(0.2, hw);
+    const flushDepthMax = thickness * 0.72;
+    const flushFitsWidth = vExtentFits(outlinePts.map(pt => {
+      const sx = pt.x * flushScale, sy = pt.y * flushScale;
+      return { v: stone.y + (sx * sinR + sy * cosR) };
+    }), 1);
+    const isFlushStone = style === 'Flush' && flushFitsWidth && depth + 0.05 <= flushDepthMax && culetOnBand;
+
+    let zTable, zGirdleTop, zGirdleBot, sink, cutContourUV;
+    let raisedToFit = false, raisedForSocket = false;
+    if (isFlushStone) {
+      zTable = 0.03;
+      zGirdleTop = zTable - crownH;
+      zGirdleBot = zGirdleTop - girdleT;
+      sink = pavH - zGirdleBot;
+      cutContourUV = outlinePts.map(pt => toWorldUV(pt, flushScale));
+    } else {
+      const fSocket = Math.min(1, stonePocketDepth / pavH);
+      const fWanted = heightOverride !== null
+        ? Math.max(0, Math.min(1, (pavH - Math.max(0, heightOverride)) / pavH))
+        : Math.max(0, Math.min(1, (pavH - Math.max(minGirdle, pavH - stonePocketDepth)) / pavH));
+      let f = Math.min(fWanted, fSocket, fFit);
+      raisedToFit = fFit < Math.min(fWanted, fSocket) - 1e-3;
+      raisedForSocket = heightOverride !== null && fSocket < fWanted - 1e-3 && !raisedToFit;
+      if (pavH * f < 0.05) f = 0;
+      sink = pavH * f;
+      zGirdleBot = pavH - sink;
+      zGirdleTop = zGirdleBot + girdleT;
+      zTable = zGirdleTop + crownH;
+      cutContourUV = pavilionSection(f).map(p => ({
+        u: culetCenter.u + (p.u - culetCenter.u) * 1.02,
+        v: Math.max(-safeRimV, Math.min(safeRimV, culetCenter.v + (p.v - culetCenter.v) * 1.02)),
+        isCorner: p.isCorner
+      }));
+    }
+    const hasSocket = sink >= 0.05 && (isFlushStone || culetOnBand);
+    const stoneRFloor = surfR(stone.y) - (sink + 0.05);
     const cornerUVs = cutContourUV.filter(pt => pt.isCorner);
 
     return {
@@ -1165,17 +1231,25 @@ const build3DRingShells = ({
       maxRadius: Math.max(...cutContourUV.map(p => Math.hypot(p.u - stone.x, p.v - stone.y))) + 0.45,
       hasSocket,
       overlapsBand: vMin < seatHalfV && vMax > -seatHalfV,
-      isNarrowSeat: isNarrowSeat && hasSocket,
-      plugRootPts2D,
+      culetOnBand,
+      // A crescent's socket thins to nothing at its horns, where a grid point
+      // can sit within snapping distance of both sides; it is traced without
+      // snapping instead.
+      snapToContour: !isCrescent,
       outlinePts,
+      culetPts2D: culetWorld.map(toLocal),
       cutContourUV,
       cornerUVs,
       isFlushStone,
-      effectiveRelief,
+      wantedFlush: style === 'Flush',
+      depth, crownH, girdleT, pavH,
+      zTable, zGirdleTop, zGirdleBot, zCulet: zGirdleBot - pavH,
+      sink,
+      raisedToFit,
+      raisedForSocket,
       stonePocketDepth,
       stoneRFloor,
-      plugScale,
-      requestedPocketDepth: (uniqueStone3D && stone.pocketDepthOverride !== undefined && stone.pocketDepthOverride !== null && stone.pocketDepthOverride !== '')
+      requestedPocketDepth: (uniqueStone3D && isSetNumber(stone.pocketDepthOverride))
         ? Number(stone.pocketDepthOverride)
         : Number(pocketDepthInput)
     };
@@ -1291,6 +1365,24 @@ const build3DRingShells = ({
   const vSteps = vSamples.length - 1;
 
   const numU = uSamples.length;
+
+  // Grid points and edge crossings near a sharp socket corner snap exactly
+  // onto it. The snap radius stays under half the smallest grid spacing, so
+  // two neighboring grid points can never both claim one corner (that would
+  // duplicate it and break the watertight mesh).
+  let minGridStep = Infinity;
+  // Only rows where sockets can be cut count (not a domed band's extra rim rows).
+  for (let j = 1; j < vSamples.length; j++) {
+    if (Math.abs(vSamples[j]) <= safeRimV && Math.abs(vSamples[j - 1]) <= safeRimV) {
+      minGridStep = Math.min(minGridStep, vSamples[j] - vSamples[j - 1]);
+    }
+  }
+  for (let i = 1; i < uSamples.length; i++) {
+    if (uSamples[i] >= minStoneU && uSamples[i - 1] >= minStoneU && uSamples[i] <= maxStoneU) {
+      minGridStep = Math.min(minGridStep, uSamples[i] - uSamples[i - 1]);
+    }
+  }
+  const cornerSnapR = Math.min(0.09, 0.45 * minGridStep);
   const numV = vSteps + 1;
 
   const gridUV = new Array(numU * numV);
@@ -1315,11 +1407,11 @@ const build3DRingShells = ({
         if (res.stone) {
           localRFloor = res.stone.stoneRFloor;
         }
-        if (Math.abs(d) < 0.032 && res.stone && !isFoldRow(v)) {
+        if (Math.abs(d) < 0.032 && res.stone && res.stone.snapToContour && !isFoldRow(v)) {
           let snapped = projectPointToPolygonContour2D(u, v, res.stone.cutContourUV);
           for (let c = 0; c < res.stone.cornerUVs.length; c++) {
             const cPt = res.stone.cornerUVs[c];
-            if (Math.hypot(u - cPt.u, v - cPt.v) < 0.09) {
+            if (Math.hypot(u - cPt.u, v - cPt.v) < cornerSnapR) {
               snapped = { u: cPt.u, v: cPt.v };
               break;
             }
@@ -1370,7 +1462,7 @@ const build3DRingShells = ({
     let cv = uvA.v + (uvB.v - uvA.v) * t;
     const hint = evalPocketSignedDist(cu, cv).stone;
     const crossRFloor = hint ? hint.stoneRFloor : defaultRFloor;
-    if (hint && hint.cutContourUV) {
+    if (hint && hint.cutContourUV && hint.snapToContour) {
       const proj = projectPointToPolygonContour2D(cu, cv, hint.cutContourUV);
       cu = proj.u;
       cv = Math.max(-safeRimV, Math.min(safeRimV, proj.v));
@@ -1379,11 +1471,22 @@ const build3DRingShells = ({
       // almost-coincident ones that leave a pinhole in the mesh.
       for (let c = 0; c < hint.cornerUVs.length; c++) {
         const cPt = hint.cornerUVs[c];
-        if (Math.hypot(cu - cPt.u, cv - cPt.v) < 0.09) {
+        if (Math.hypot(cu - cPt.u, cv - cPt.v) < cornerSnapR) {
           cu = cPt.u;
           cv = Math.max(-safeRimV, Math.min(safeRimV, cPt.v));
           break;
         }
+      }
+    }
+
+    // If this lands a hair from an end already snapped onto the outline, it
+    // is that same point: reuse the end's vertices so no near-duplicate
+    // vertex (overlapping its neighbours) is created.
+    for (const id of [minId, maxId]) {
+      if (gridDist[id] === 0 && Math.hypot(gridUV[id].u - cu, gridUV[id].v - cv) < 0.005) {
+        cached = { out: gridOutVerts[id], flr: gridFlrVerts[id] };
+        edgeCrossingCache.set(key, cached);
+        return cached;
       }
     }
 
@@ -1562,6 +1665,40 @@ const build3DRingShells = ({
     return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'gem' }));
   };
 
+  // A cut stone in its own flat frame: table, crown down to the girdle, the
+  // girdle band, and the pavilion narrowing to the culet. Heights (mm) are
+  // relative to the band surface under the frame's center. All rings share
+  // the outline's point order, so the sides are simple quad strips.
+  const buildStoneShell = (pts2D, centerU, centerV, rotDeg, geom, opts = {}) => {
+    const rad = (rotDeg * Math.PI) / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    const frame = makeFlatFrame(opts.frameU ?? centerU, opts.frameV ?? centerV);
+    const place = (pt, z) => placeFlat(
+      frame,
+      centerU + (pt.x * cosR - pt.y * sinR),
+      centerV + (pt.x * sinR + pt.y * cosR),
+      outerRadius + z
+    );
+    const tableRing = geom.tablePts2D.map(p => place(p, geom.zTable));
+    const girdleTopRing = pts2D.map(p => place(p, geom.zGirdleTop));
+    const girdleBotRing = pts2D.map(p => place(p, geom.zGirdleBot));
+    const culetRing = geom.culetPts2D.map(p => place(p, geom.zCulet));
+    const n = pts2D.length;
+    const tris = [];
+    const strip = (lower, upper) => {
+      for (let i = 0; i < n; i++) {
+        const next = (i + 1) % n;
+        tris.push([lower[i], upper[i], upper[next]], [lower[i], upper[next], lower[next]]);
+      }
+    };
+    strip(culetRing, girdleBotRing);
+    strip(girdleBotRing, girdleTopRing);
+    strip(girdleTopRing, tableRing);
+    earClipPolygon(geom.culetPts2D).forEach(([a, b, c]) => tris.push([culetRing[a], culetRing[b], culetRing[c]]));
+    earClipPolygon(geom.tablePts2D).forEach(([a, b, c]) => tris.push([tableRing[c], tableRing[b], tableRing[a]]));
+    return tris.map(t => ({ v1: t[0], v2: t[1], v3: t[2], normal: computeNormal(t[0], t[1], t[2]), shadeTag: 'gem' }));
+  };
+
   // Bezel collar: a hybrid of both placements. The rings that meet the band
   // (outer root/seat, inner root) follow the band's curve via wrapPoint so the
   // collar stays welded to the shank. The rings that hold the stone (girdle,
@@ -1570,7 +1707,7 @@ const build3DRingShells = ({
   // dropped away from the gem along the ring's circumference and left the
   // stone standing proud of its bezel there.
   const buildShapeSpecificBezelShell = (stone) => {
-    const { shape, hw, hh, rot, x: centerU, y: centerV, outlinePts: pts2D, effectiveRelief, stoneRFloor } = stone;
+    const { shape, hw, hh, rot, x: centerU, y: centerV, outlinePts: pts2D, stoneRFloor } = stone;
     const bSize = Math.max(0.15, Number(stone.bezelSize) || 0.5);
     const rad = (rot * Math.PI) / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
@@ -1596,13 +1733,16 @@ const build3DRingShells = ({
     const outerGirdlePts2D = offsetPolygon2D(pts2D, bSize, shape);
     const outerSkirtPts2D = offsetPolygon2D(pts2D, bSize * 1.06, shape);
 
-    const setRelief = Math.max(0.32, effectiveRelief);
+    // The bezel wall rises from the band to wrap the stone's girdle; its lip
+    // rolls just over the edge of the crown. The stone rests on the inner
+    // seat at its girdle.
+    const lipZ = Math.max(0.3, stone.zGirdleTop + stone.crownH * 0.35);
     const rRoot = Math.min(stoneRFloor, outerRadius - 0.48);
     const rBandSeat = outerRadius - 0.14;
-    const rGirdle = outerRadius + setRelief * 0.56;
-    const rTopOuter = outerRadius + setRelief * 0.88;
-    const rTopLip = outerRadius + setRelief * 0.92;
-    const rInnerGirdle = outerRadius + setRelief * 0.52;
+    const rGirdle = outerRadius + Math.max(0.1, Math.min(stone.zGirdleBot, lipZ * 0.6));
+    const rTopOuter = outerRadius + lipZ - 0.03;
+    const rTopLip = outerRadius + lipZ;
+    const rInnerGirdle = outerRadius + Math.max(0.05, Math.min(stone.zGirdleBot - 0.02, lipZ - 0.1));
 
     const outRootRing = [];
     const outSeatRing = [];
@@ -1834,34 +1974,12 @@ const build3DRingShells = ({
 
   if (cutoutMode !== 'sockets_only') {
     preparedStones.forEach((stone, idx) => {
-      const { hw, hh, rot, shape, outlinePts: pts, effectiveRelief, isFlushStone, stonePocketDepth, stoneRFloor } = stone;
-
-      const rRoot = carveBandPockets
-        ? (stoneRFloor + 0.015)
-        : (outerRadius - 0.45);
-
-      let rTable = isFlushStone
-        ? (outerRadius + 0.03)
-        : (outerRadius + effectiveRelief);
-      let rGirdle = isFlushStone
-        ? (outerRadius - stonePocketDepth * 0.35)
-        : (outerRadius + effectiveRelief * 0.55);
-
-      // Wider than the band: the pavilion narrows into the socket and the
-      // stone only reaches full width just above the band surface. A flush
-      // stone can't sit below a surface narrower than itself, so it rides
-      // just above the band instead.
-      let gemOpts = {};
-      if (stone.isNarrowSeat) {
-        const seatR = outerRadius + 0.02;
-        rGirdle = Math.max(rGirdle, seatR + 0.12);
-        rTable = Math.max(rTable, rGirdle + 0.2);
-        gemOpts = { rootPts2D: stone.plugRootPts2D, seatR };
-      }
-
-      const tableK = isFlushStone ? 0.78 : 0.64;
-      gemOpts.tablePts2D = insetStoneOutline(shape, pts, tableK);
-      const gemTris = buildFacetedCrownShell(pts, stone.x, stone.y, rot, rRoot, rGirdle, rTable, tableK, gemOpts);
+      const { hw, hh, rot, shape, outlinePts: pts, stoneRFloor } = stone;
+      const gemTris = buildStoneShell(pts, stone.x, stone.y, rot, {
+        tablePts2D: insetStoneOutline(shape, pts, CUT_TABLE[shape] ?? 0.56),
+        culetPts2D: stone.culetPts2D,
+        zTable: stone.zTable, zGirdleTop: stone.zGirdleTop, zGirdleBot: stone.zGirdleBot, zCulet: stone.zCulet
+      });
       shells.push({
         name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_${shape.replace(/\s+/g, '')}`,
         role: `Stone ${idx + 1} (${stone.colorMode === 'preset' ? stone.preset : 'Custom'})`,
@@ -1872,7 +1990,9 @@ const build3DRingShells = ({
 
       if (include3DSettings && stone.settingStyle && !['None', 'Flush'].includes(stone.settingStyle)) {
         const style = stone.settingStyle;
-        const setRelief = Math.max(0.4, effectiveRelief);
+        // Prong tips rise past the girdle and over the edge of the crown.
+        const prongGirdleR = outerRadius + stone.zGirdleTop + stone.crownH * 0.2;
+        const prongTopR = outerRadius + stone.zGirdleTop + stone.crownH * 0.55;
         if (style === 'Bezel') {
           const bezelColorHex = METAL_COLORS[stone.bezelColor || bandColor]?.hex || '#d4af37';
           const bezelTris = buildShapeSpecificBezelShell(stone);
@@ -1887,8 +2007,8 @@ const build3DRingShells = ({
           const vProngSpec = getVProngData(shape, hw, hh);
           const allVProngTris = [];
           const prongRoot = Math.min(stoneRFloor, outerRadius - 0.42);
-          const prongGirdle = outerRadius + setRelief * 0.68;
-          const prongTop = outerRadius + setRelief * 1.06;
+          const prongGirdle = prongGirdleR;
+          const prongTop = outerRadius + stone.zGirdleTop + stone.crownH * 0.45;
 
           vProngSpec.chevrons.forEach((chev) => {
             const cTris = build3DVProngChevron(chev, stone, prongRoot, prongGirdle, prongTop);
@@ -1905,7 +2025,7 @@ const build3DRingShells = ({
               const pv = stone.y + (p.x * sinR + p.y * cosR);
               const pTris = buildFacetedCrownShell(
                 prongOutline, pu, pv, 0,
-                prongRoot, outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.08, 0.7,
+                prongRoot, prongGirdleR, prongTopR, 0.7,
                 { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: noteLean(stone, footOffsetV(pv, pRadius)) }
               );
               allVProngTris.push(...pTris);
@@ -1934,7 +2054,7 @@ const build3DRingShells = ({
             const pv = stone.y + (p.x * sinR + p.y * cosR);
             const pTris = buildFacetedCrownShell(
               prongOutline, pu, pv, 0,
-              Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.85, outerRadius + setRelief * 1.12, 0.7,
+              Math.min(stoneRFloor, outerRadius - 0.38), prongGirdleR, prongTopR, 0.7,
               { frameU: stone.x, frameV: stone.y, wrapRoot: true, rootOffsetV: noteLean(stone, footOffsetV(pv, pRadius)) }
             );
             allProngTris.push(...pTris);
@@ -1957,12 +2077,25 @@ const build3DRingShells = ({
           const rad = (rot * Math.PI) / 180;
           const cosR = Math.cos(rad), sinR = Math.sin(rad);
 
+          // Halo stones are cut to the same proportions; their deck sits just
+          // below the center stone's girdle and their pavilions sink into it.
+          const hDepth = getStoneDepth('Round Brilliant', hSize);
+          const deckZ = Math.max(0.2, stone.zGirdleBot - 0.05);
+          const hGirdleBot = deckZ + 0.02;
+          const hGeom = {
+            tablePts2D: haloGemOutline.map(p => ({ x: p.x * 0.56, y: p.y * 0.56 })),
+            culetPts2D: haloGemOutline.map(p => ({ x: p.x * 0.04, y: p.y * 0.04 })),
+            zGirdleBot: hGirdleBot,
+            zGirdleTop: hGirdleBot + hDepth * STONE_PROPORTIONS.girdle,
+            zTable: hGirdleBot + hDepth * (STONE_PROPORTIONS.girdle + STONE_PROPORTIONS.crown),
+            zCulet: hGirdleBot - hDepth * STONE_PROPORTIONS.pavilion
+          };
           const seatInnerPts = offsetPolygon2D(pts, 0.05, shape);
           const seatOuterPts = offsetPolygon2D(pts, hSize + 0.25, shape);
           const seatTris = buildHollowCollarShell(
             pts, stone.x, stone.y, rot,
             seatInnerPts, seatOuterPts,
-            Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + setRelief * 0.42
+            Math.min(stoneRFloor, outerRadius - 0.38), outerRadius + deckZ
           );
           shells.push({
             name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Halo_Base`,
@@ -1975,23 +2108,21 @@ const build3DRingShells = ({
           // One part per halo color, so per-stone colors show in 3D and each
           // color exports as its own named object for multi-color printing.
           const haloGroups = new Map();
+          const haloCounts = new Map();
           hData.stones.forEach((hp, hIdx) => {
             const hColor = getHaloStoneColor(stone, hIdx);
             if (!haloGroups.has(hColor)) haloGroups.set(hColor, []);
             const haloTris = haloGroups.get(hColor);
             const hu = stone.x + (hp.x * cosR - hp.y * sinR);
             const hv = stone.y + (hp.x * sinR + hp.y * cosR);
-            const hTris = buildFacetedCrownShell(
-              haloGemOutline, hu, hv, 0,
-              outerRadius + setRelief * 0.2, outerRadius + setRelief * 0.65, outerRadius + setRelief * 0.88, 0.65,
-              { frameU: stone.x, frameV: stone.y }
-            );
+            const hTris = buildStoneShell(haloGemOutline, hu, hv, 0, hGeom, { frameU: stone.x, frameV: stone.y });
             haloTris.push(...hTris);
+            haloCounts.set(hColor, (haloCounts.get(hColor) || 0) + 1);
           });
 
           const baseHaloColor = getHaloStoneColor({ ...stone, haloUniqueStones: false }, 0);
           haloGroups.forEach((haloTris, hColor) => {
-            const count = haloTris.length / (haloGemOutline.length * 6);
+            const count = haloCounts.get(hColor);
             const colorName = Object.keys(PRESET_STONES).find(k => PRESET_STONES[k] === hColor);
             const isBase = hColor === baseHaloColor;
             const suffix = isBase ? '' : `_${(colorName || hColor.replace('#', '')).replace(/\s+/g, '')}`;
@@ -2010,31 +2141,56 @@ const build3DRingShells = ({
 
   preparedStones.forEach((stone) => {
     const fmt = (n) => Number(n).toFixed(2).replace(/\.?0+$/, '');
+    const style = stone.settingStyle || '4-Prong';
+    const girdleAbove = fmt(Math.max(0, stone.zGirdleBot));
+    if (stone.wantedFlush && !stone.isFlushStone) {
+      const reason = stone.depth + 0.05 > thickness * 0.72
+        ? `${fmt(stone.depth)} mm deep, more than this ${fmt(thickness)} mm band can hold`
+        : 'too wide for this band';
+      addNote(stone, 'info', `Can't be set flush (${reason}), so its girdle sits ${girdleAbove} mm above the band instead.`);
+    }
     if (carveBandPockets) {
-      if (!stone.hasSocket && !stone.overlapsBand) {
+      if (!stone.overlapsBand) {
         addNote(stone, 'warn', 'This stone is off the band, so no socket is cut. Move it toward the band center or widen the band.');
+      } else if (!stone.culetOnBand) {
+        addNote(stone, 'warn', "This stone's center is too far off the band for its pavilion to reach it, so no socket is cut. Move it toward the band center.");
       } else if (!stone.hasSocket) {
-        addNote(stone, 'warn', `Too large for the ${fmt(bw)} mm band to hold: a plug that fits would be under 20% of the stone, so no socket is cut. Widen the band or use a smaller stone.`);
-      } else if (stone.isNarrowSeat) {
-        addNote(stone, 'info', `Wider than the ${fmt(bw)} mm band: its plug is narrowed to ${Math.round(stone.plugScale * 100)}% of the stone's outline so the band keeps solid rims.`);
+        if (style === 'None') {
+          addNote(stone, 'warn', 'Sits entirely above the band with no setting to hold it. Lower the setting height or choose a setting.');
+        } else {
+          addNote(stone, 'info', 'Sits entirely above the band, held by its setting; no socket is cut.');
+        }
+      } else if (stone.raisedToFit) {
+        addNote(stone, 'info', `Raised so its pavilion fits the ${fmt(bw)} mm band: the girdle sits ${girdleAbove} mm above the band.`);
+      } else if (stone.raisedForSocket) {
+        addNote(stone, 'info', `Setting height raised to ${girdleAbove} mm because the socket is only ${fmt(stone.stonePocketDepth)} mm deep.`);
       }
       if (stone.requestedPocketDepth - stone.stonePocketDepth > 0.005) {
         addNote(stone, 'warn', `Socket depth capped at ${fmt(stone.stonePocketDepth)} mm (requested ${fmt(stone.requestedPocketDepth)} mm) to keep the ${fmt(thickness)} mm band intact.`);
       }
       const metalUnder = stone.stoneRFloor - innerRadius;
       if (stone.hasSocket && metalUnder < MIN_METAL_UNDER_SOCKET) {
-        addNote(stone, 'warn', `Only ${fmt(metalUnder)} mm of metal under this socket; ${MIN_METAL_UNDER_SOCKET} mm or more is safer to print. Use a shallower socket or a thicker band.`);
+        addNote(stone, 'warn', `Only ${fmt(metalUnder)} mm of metal under this socket; ${MIN_METAL_UNDER_SOCKET} mm or more is safer to print. Use a shallower socket, a smaller stone or a thicker band.`);
       }
-    }
-    if (stone.isFlushStone && stone.isNarrowSeat) {
-      addNote(stone, 'info', 'Too wide to set flush in this band, so it sits just above the band surface.');
     }
     if (include3DSettings && leaningStones.has(stone)) {
       addNote(stone, 'info', 'Prongs past the band edge lean inward so their feet land on the band.');
     }
   });
 
-  return { shells, innerDiameter, outerDiameter: outerRadius * 2, bandWidth: bw, stoneNotes };
+  // Per-stone measurements for the stone cards and the bill of materials.
+  const stoneInfo = {};
+  preparedStones.forEach((stone) => {
+    stoneInfo[stone.id ?? stone.originalIndex] = {
+      depth: stone.depth,
+      girdleHeight: stone.zGirdleBot,
+      tableHeight: stone.zTable,
+      sink: stone.sink,
+      isFlush: stone.isFlushStone
+    };
+  });
+
+  return { shells, innerDiameter, outerDiameter: outerRadius * 2, bandWidth: bw, stoneNotes, stoneInfo };
 };
 
 const generateBinarySTLBlob = (shells, bandWidth = 4) => {
@@ -2577,7 +2733,10 @@ function App() {
 
   const [ringSize, setRingSize] = useState(7);
   const [bandThickness, setBandThickness] = useState(1.8);
-  const [gemRelief, setGemRelief] = useState(1.2);
+  // Girdle height above the band (null = auto) and stone depth as a % of the
+  // standard depth for each cut.
+  const [settingHeight, setSettingHeight] = useState(null);
+  const [stoneDepthPct, setStoneDepthPct] = useState(100);
   const [pocketDepthInput, setPocketDepthInput] = useState(0.75);
   const [uniqueStone3D, setUniqueStone3D] = useState(false);
   const [include3DSettings, setInclude3DSettings] = useState(true);
@@ -2618,7 +2777,7 @@ function App() {
       shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
       width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
       haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
-      reliefOverride: '', pocketDepthOverride: ''
+      settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
     },
   ]);
 
@@ -2627,7 +2786,7 @@ function App() {
   // view settings like zoom, rulers or overlays. Changes are committed after
   // a short pause, so one slider drag or typed number is one undo step.
   const designSnapshot = {
-    stones, bandColor, bandWidth, layoutMode, ringSize, bandThickness, gemRelief,
+    stones, bandColor, bandWidth, layoutMode, ringSize, bandThickness, settingHeight, stoneDepthPct,
     pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize
   };
   const designKey = JSON.stringify(designSnapshot);
@@ -2668,7 +2827,8 @@ function App() {
     setLayoutMode(d.layoutMode);
     setRingSize(d.ringSize);
     setBandThickness(d.bandThickness);
-    setGemRelief(d.gemRelief);
+    setSettingHeight(d.settingHeight);
+    setStoneDepthPct(d.stoneDepthPct);
     setPocketDepthInput(d.pocketDepthInput);
     setUniqueStone3D(d.uniqueStone3D);
     setInclude3DSettings(d.include3DSettings);
@@ -2730,7 +2890,7 @@ function App() {
           shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
           width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
           haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
-          reliefOverride: '', pocketDepthOverride: ''
+          settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
         }];
       }
 
@@ -2757,7 +2917,8 @@ function App() {
           haloColor: lastStone.haloColor || PRESET_STONES['Diamond'],
           haloUniqueStones: lastStone.haloUniqueStones || false,
           haloOverrides: lastStone.haloOverrides || {},
-          reliefOverride: lastStone.reliefOverride ?? '',
+          settingHeightOverride: lastStone.settingHeightOverride ?? '',
+          depthOverride: lastStone.depthOverride ?? '',
           pocketDepthOverride: lastStone.pocketDepthOverride ?? ''
         }
       ];
@@ -2792,7 +2953,7 @@ function App() {
       zoom, bandColor, bandWidth, isFlatBand, layoutMode,
       showSeparation, showWidth, showVertical, verticalFrom,
       measTextSize, showRuler, rulerScale, rulerOffset,
-      ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize,
+      ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize,
       stones
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
@@ -2824,7 +2985,8 @@ function App() {
 
           setRingSize(config.ringSize ?? 7);
           setBandThickness(config.bandThickness ?? 1.8);
-          setGemRelief(config.gemRelief ?? 1.2);
+          setSettingHeight(isSetNumber(config.settingHeight) ? Number(config.settingHeight) : null);
+          setStoneDepthPct(isSetNumber(config.stoneDepthPct) ? Number(config.stoneDepthPct) : 100);
           setPocketDepthInput(config.pocketDepthInput ?? 0.75);
           setUniqueStone3D(config.uniqueStone3D ?? false);
           setInclude3DSettings(config.include3DSettings ?? true);
@@ -2876,7 +3038,8 @@ function App() {
             haloColor: target.haloColor,
             haloUniqueStones: target.haloUniqueStones,
             haloOverrides: target.haloOverrides,
-            reliefOverride: target.reliefOverride,
+            settingHeightOverride: target.settingHeightOverride,
+            depthOverride: target.depthOverride,
             pocketDepthOverride: target.pocketDepthOverride
           };
         }
@@ -2934,7 +3097,8 @@ function App() {
       bandColor,
       ringSize,
       bandThickness,
-      gemRelief,
+      settingHeight,
+      stoneDepthPct,
       pocketDepthInput,
       uniqueStone3D,
       include3DSettings,
@@ -2942,7 +3106,7 @@ function App() {
       bandProfile,
       bandProfileSize
     });
-  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, gemRelief, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize]);
+  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize]);
 
   const handleExportSTL = useCallback(() => {
     const blob = generateBinarySTLBlob(ring3DData.shells, bandWidth);
@@ -3003,7 +3167,7 @@ function App() {
     };
     const mm = (n) => Number(n).toFixed(2);
     const stoneName = (hex) => Object.keys(PRESET_STONES).find(k => PRESET_STONES[k] === hex) || `Custom ${hex}`;
-    const headers = ['Item', 'Qty', 'Part', 'Shape', 'Size (mm)', 'Stone / Metal', 'Setting', 'Relief (mm)', 'Socket Depth (mm)', 'Notes'];
+    const headers = ['Item', 'Qty', 'Part', 'Shape', 'Size W × L × D (mm)', 'Stone / Metal', 'Setting', 'Girdle Above Band (mm)', 'Socket Depth (mm)', 'Notes'];
     const rows = [];
 
     const halfBW = (Number(bandWidth) || 4) / 2;
@@ -3021,15 +3185,17 @@ function App() {
       const w = Number(stone.width) || 0;
       const h = w * (SHAPE_RATIOS[stone.shape] || 1);
       const role = layoutMode === 'cluster' ? (i === 0 ? 'center anchor' : `${stone.side} side`) : 'scatter row';
-      const stRelief = (uniqueStone3D && stone.reliefOverride !== '' && stone.reliefOverride !== undefined && stone.reliefOverride !== null) ? stone.reliefOverride : gemRelief;
-      const stDepth = (uniqueStone3D && stone.pocketDepthOverride !== '' && stone.pocketDepthOverride !== undefined && stone.pocketDepthOverride !== null) ? stone.pocketDepthOverride : pocketDepthInput;
+      const info = ring3DData.stoneInfo?.[stone.id] || {};
+      const depthMM = info.depth ?? getStoneDepth(stone.shape, w, stoneDepthPct, uniqueStone3D ? stone.depthOverride : null);
       const setting = stone.settingStyle === 'Bezel'
         ? `Bezel ${mm(stone.bezelSize || 0.5)} mm, ${stone.bezelColor || bandColor}`
         : stone.settingStyle === 'Halo' ? `Halo (${mm(stone.haloSize || 1)} mm stones)` : stone.settingStyle;
       rows.push([
-        `Stone ${i + 1}`, 1, `Stone (${role})`, stone.shape, `${mm(w)} × ${mm(h)}`,
+        `Stone ${i + 1}`, 1, `Stone (${role})`, stone.shape, `${mm(w)} × ${mm(h)} × ${mm(depthMM)}`,
         stone.colorMode === 'preset' ? stone.preset : `Custom ${stone.color}`,
-        setting, mm(stRelief), mm(stDepth),
+        setting,
+        info.isFlush ? 'Flush' : mm(Math.max(0, info.girdleHeight ?? 0)),
+        mm(info.sink ?? 0),
         (ring3DData.stoneNotes?.[stone.id] || []).map(n => n.text).join(' ')
       ]);
 
@@ -3043,7 +3209,7 @@ function App() {
         });
         byColor.forEach((count, hex) => {
           rows.push([
-            `Stone ${i + 1} halo`, count, 'Halo stone', 'Round Brilliant', `Ø ${mm(hSize)}`,
+            `Stone ${i + 1} halo`, count, 'Halo stone', 'Round Brilliant', `Ø ${mm(hSize)} × ${mm(getStoneDepth('Round Brilliant', hSize))}`,
             stoneName(hex), `Halo around stone ${i + 1}`, '', '', ''
           ]);
         });
@@ -3077,13 +3243,13 @@ function App() {
         return `M 0 ${-hh} L ${sx} ${-hh*0.5} L ${sx} ${hh*0.5} L 0 ${hh} L ${-sx} ${hh*0.5} L ${-sx} ${-hh*0.5} Z`;
       }
       case 'Pear':
-        return `M 0 ${-hh} C ${hw*1.15} ${-hh*0.1}, ${hw*1.15} ${hh}, 0 ${hh} C ${-hw*1.15} ${hh}, ${-hw*1.15} ${-hh*0.1}, 0 ${-hh} Z`;
+        return `M 0 ${-hh} C ${hw*SIDE_CURVE_REACH} ${-hh*0.1}, ${hw*SIDE_CURVE_REACH} ${hh}, 0 ${hh} C ${-hw*SIDE_CURVE_REACH} ${hh}, ${-hw*SIDE_CURVE_REACH} ${-hh*0.1}, 0 ${-hh} Z`;
       case 'Radiant': {
         const cr = hw * 0.2;
         return `M ${-hw+cr} ${-hh} L ${hw-cr} ${-hh} L ${hw} ${-hh+cr} L ${hw} ${hh-cr} L ${hw-cr} ${hh} L ${-hw+cr} ${hh} L ${-hw} ${hh-cr} L ${-hw} ${-hh+cr} Z`;
       }
       case 'Marquise':
-        return `M 0 ${-hh} C ${hw*1.1} ${-hh*0.3}, ${hw*1.1} ${hh*0.3}, 0 ${hh} C ${-hw*1.1} ${hh*0.3}, ${-hw*1.1} ${-hh*0.3}, 0 ${-hh} Z`;
+        return `M 0 ${-hh} C ${hw*SIDE_CURVE_REACH} ${-hh*0.3}, ${hw*SIDE_CURVE_REACH} ${hh*0.3}, 0 ${hh} C ${-hw*SIDE_CURVE_REACH} ${hh*0.3}, ${-hw*SIDE_CURVE_REACH} ${-hh*0.3}, 0 ${-hh} Z`;
       case 'Asscher': {
         const ca = hw * 0.5;
         return `M ${-hw+ca} ${-hh} L ${hw-ca} ${-hh} L ${hw} ${-hh+ca} L ${hw} ${hh-ca} L ${hw-ca} ${hh} L ${-hw+ca} ${hh} L ${-hw} ${hh-ca} L ${-hw} ${-hh+ca} Z`;
@@ -3869,7 +4035,8 @@ function App() {
                     </span>
                   )}
                   <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
-                    {uniqueStone3D ? 'Per-stone heights' : (Number(gemRelief) === 0 ? 'Flush' : `${Number(gemRelief).toFixed(1)} mm relief`)}
+                    {uniqueStone3D ? 'Per-stone heights' : (isSetNumber(settingHeight) ? `Girdle +${Number(settingHeight).toFixed(2)} mm` : 'Auto setting height')}
+                    {Number(stoneDepthPct) !== 100 ? ` · ${Number(stoneDepthPct)}% depth` : ''}
                   </span>
                   <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
                     {cutoutMode === 'pocket_and_gem' ? 'Pocket + gem' : cutoutMode === 'sockets_only' ? 'Empty sockets' : 'Solid band'}
@@ -3960,8 +4127,41 @@ function App() {
                   })()}
                   <ControlSlider label="US Ring Size" value={ringSize} min={3} max={15} step={0.25} onChange={setRingSize} unit="US" />
                   <ControlSlider label="Band Thickness" value={bandThickness} min={1.2} max={4.0} step={0.1} onChange={setBandThickness} unit="mm" />
-                  <ControlSlider label="Gem Relief Height (0 = Flush)" value={gemRelief} min={0.0} max={3.5} step={0.1} onChange={setGemRelief} unit="mm" />
-                  <ControlSlider label="Carved Socket Depth" value={pocketDepthInput} min={0.2} max={1.5} step={0.05} onChange={setPocketDepthInput} unit="mm" />
+                  <ControlSlider label="Stone Depth (% of standard cut)" value={stoneDepthPct} min={60} max={140} step={1} onChange={setStoneDepthPct} unit="%" />
+                  <p className="-mt-1 text-[11px] text-gray-500">
+                    At 100%, each cut uses its standard depth: a 6 mm round is {getStoneDepth('Round Brilliant', 6, stoneDepthPct).toFixed(2)} mm deep{Number(stoneDepthPct) !== 100 ? ` at ${Number(stoneDepthPct)}%` : ''}.
+                  </p>
+                  {(() => {
+                    const isAuto = !isSetNumber(settingHeight);
+                    const firstInfo = ring3DData.stoneInfo?.[effectiveStones[0]?.id];
+                    const shown = isAuto ? Number(Math.max(0, firstInfo?.girdleHeight ?? 0).toFixed(2)) : settingHeight;
+                    return (
+                      <div className="flex flex-col gap-1 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                        <ControlSlider
+                          label={`Setting Height${isAuto ? ' (auto)' : ''}`}
+                          value={shown}
+                          min={0}
+                          max={6}
+                          step={0.05}
+                          onChange={setSettingHeight}
+                          unit="mm"
+                        />
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                          <span>
+                            {isAuto
+                              ? 'Girdle height above the band. Auto sinks each stone as deep as its socket allows.'
+                              : 'Girdle height above the band for every stone.'}
+                          </span>
+                          {!isAuto && (
+                            <button onClick={() => setSettingHeight(null)} className="font-semibold text-emerald-700 hover:text-emerald-800 underline">
+                              Auto
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <ControlSlider label="Max Socket Depth" value={pocketDepthInput} min={0.2} max={1.5} step={0.05} onChange={setPocketDepthInput} unit="mm" />
                   {Number(pocketDepthInput) > Math.max(1.2, Number(bandThickness) || 1.8) * 0.72 + 0.005 && (
                     <p className="-mt-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
                       Sockets are capped at {(Math.max(1.2, Number(bandThickness) || 1.8) * 0.72).toFixed(2)} mm (72% of the band thickness) so the band stays intact.
@@ -3979,12 +4179,12 @@ function App() {
                           className="w-3.5 h-3.5 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
                         />
                         <label htmlFor="unique-stone-3d" className="text-xs font-bold text-gray-700 cursor-pointer select-none">
-                          Unique stone heights and depths
+                          Per-stone setting height, stone depth and socket depth
                         </label>
                       </div>
                       {uniqueStone3D && (
                         <button
-                          onClick={() => setStones(prev => prev.map(s => ({ ...s, reliefOverride: '', pocketDepthOverride: '' })))}
+                          onClick={() => setStones(prev => prev.map(s => ({ ...s, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: '' })))}
                           className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800 underline"
                         >
                           Reset All
@@ -4016,22 +4216,27 @@ function App() {
                                 )}
                               </div>
 
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-[9px] font-bold text-gray-400 uppercase">Height (Relief, mm)</span>
-                                <input
-                                  type="number" min={0} step={0.1}
-                                  disabled={isStoneLinked}
-                                  value={stone.reliefOverride === undefined || stone.reliefOverride === null ? '' : stone.reliefOverride}
-                                  placeholder={`Global ${gemRelief.toFixed(1)}`}
-                                  onChange={(e) => updateStone(sIdx, { reliefOverride: e.target.value === '' ? '' : Number(e.target.value) })}
-                                  onBlur={() => { const v = stone.reliefOverride; if (v !== '' && v !== undefined && v !== null && (!Number.isFinite(Number(v)) || Number(v) < 0)) updateStone(sIdx, { reliefOverride: 0 }); }}
-                                  onKeyDown={blurOnEnter}
-                                  className="w-full text-[10px] border border-gray-200 rounded py-0.5 px-1 outline-none bg-gray-50 font-mono text-gray-700 focus:border-emerald-500 disabled:opacity-60"
-                                />
-                              </div>
+                              {[
+                                { key: 'settingHeightOverride', label: 'Setting height (mm)', min: 0, step: 0.05, auto: ring3DData.stoneInfo?.[stone.id]?.girdleHeight },
+                                { key: 'depthOverride', label: 'Stone depth (mm)', min: 0.3, step: 0.05, auto: ring3DData.stoneInfo?.[stone.id]?.depth }
+                              ].map(field => (
+                                <div key={field.key} className="flex flex-col gap-0.5">
+                                  <span className="text-[9px] font-bold text-gray-400 uppercase">{field.label}</span>
+                                  <input
+                                    type="number" min={field.min} step={field.step}
+                                    disabled={isStoneLinked}
+                                    value={stone[field.key] === undefined || stone[field.key] === null ? '' : stone[field.key]}
+                                    placeholder={Number.isFinite(field.auto) ? `Auto ${Math.max(0, field.auto).toFixed(2)}` : 'Auto'}
+                                    onChange={(e) => updateStone(sIdx, { [field.key]: e.target.value === '' ? '' : Number(e.target.value) })}
+                                    onBlur={() => { const v = stone[field.key]; if (isSetNumber(v) && Number(v) < field.min) updateStone(sIdx, { [field.key]: field.min }); else if (v !== '' && v !== undefined && v !== null && !isSetNumber(v)) updateStone(sIdx, { [field.key]: '' }); }}
+                                    onKeyDown={blurOnEnter}
+                                    className="w-full text-[10px] border border-gray-200 rounded py-0.5 px-1 outline-none bg-gray-50 font-mono text-gray-700 focus:border-emerald-500 disabled:opacity-60"
+                                  />
+                                </div>
+                              ))}
 
                               <div className="flex flex-col gap-0.5">
-                                <span className="text-[9px] font-bold text-gray-400 uppercase">Socket Depth (mm)</span>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">Max socket depth (mm)</span>
                                 <input
                                   type="number" min={0.2} step={0.05}
                                   disabled={isStoneLinked}
@@ -4196,6 +4401,19 @@ function App() {
                       {isLinked && (
                         <div className="absolute inset-0 bg-gray-50/40 z-10 pointer-events-none" />
                       )}
+
+                      {ring3DData.stoneInfo?.[stone.id] && (() => {
+                        const info = ring3DData.stoneInfo[stone.id];
+                        const w = Number(stone.width) || 0;
+                        const h = w * (SHAPE_RATIOS[stone.shape] || 1);
+                        return (
+                          <p className="text-[11px] text-gray-500 font-mono tabular -mb-1">
+                            {w.toFixed(2)} × {h.toFixed(2)} × {info.depth.toFixed(2)} mm
+                            <span className="font-sans text-gray-400"> · </span>
+                            {info.isFlush ? 'set flush' : `girdle ${Math.max(0, info.girdleHeight).toFixed(2)} mm above band`}
+                          </p>
+                        );
+                      })()}
 
                       {(ring3DData.stoneNotes?.[stone.id] || []).length > 0 && (
                         <ul className="flex flex-col gap-1.5" aria-label={`Notes for stone ${index + 1}`}>

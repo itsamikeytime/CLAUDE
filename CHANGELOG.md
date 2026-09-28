@@ -1,5 +1,24 @@
 # MikeyTime Ring Studio changelog
 
+## v1.4.0
+
+### New
+- **Real stone proportions in 3D.** Every stone is built with its cut's standard depth as a share of its width (Princess 70%, Asscher 68%, Radiant 67%, Cushion 66%, Emerald 65%, Oval 62%, Round 61.5%, Pear and Marquise 61%, Heart 60%; Hexagon 65% and Crescent Moon 60% are estimates). The depth is split into a crown (15%), girdle (3%) and a pavilion cone (82%) narrowing to the culet, so stones look like cut gems instead of thin plates. A 6.4 mm round is 3.94 mm deep.
+- **Stone Depth** (3D Print Settings): scale all stones from 60% to 140% of their standard depth, or set a single stone's depth in millimetres.
+- **Setting Height** replaces Gem Relief Height. It sets how high each stone's girdle sits above the band. On Auto, each stone sinks as deep into its socket as the Max Socket Depth allows and its setting raises it the rest of the way, so small stones sit low and large stones sit up on taller prongs like a real head. You can also set it for all stones or per stone.
+- **Stone cards** show each stone's width × length × depth and how high its girdle sits above the band.
+
+### Improved
+- Sockets are cut to the pavilion's cross-section where it meets the band, so the stone's cone seats into the band. Stones wider than the band are raised just enough for that cross-section to fit between the band's rims.
+- Prongs, bezels and halos are sized from each stone's real girdle and crown: prongs reach up past the girdle over the crown's edge, a bezel becomes a cup that wraps a raised stone, and a halo's deck sits just under the center stone's girdle. Halo stones use real proportions too.
+- Flush settings set the table level with the band when the whole stone fits within the band's depth and width, and explain why when it doesn't.
+- "Carved Socket Depth" is now "Max Socket Depth", the deepest a stone may sink into the band.
+- The bill of materials lists each stone as width × length × depth, with its girdle height above the band and actual socket depth.
+- **Pear and Marquise** now fill their full stated width (they were about 14% and 18% narrower).
+
+### Fixed
+- Rare mesh defects where a socket corner or edge lined up almost exactly with the band's grid. Tested watertight across 4,500 random designs plus fixed sweeps of every shape, size, offset, rotation and band profile.
+
 ## v1.3.1
 
 ### Fixed
