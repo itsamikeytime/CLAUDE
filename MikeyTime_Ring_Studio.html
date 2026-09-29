@@ -148,7 +148,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.4.2';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -3429,10 +3429,19 @@ function App() {
 
   // Serializes a copy of the blueprint without the hiding it gets in 3D view,
   // so an export taken from either view opens as a visible drawing.
-  const serializeBlueprint = () => {
+  const serializeBlueprint = (pixelSize) => {
     const clone = svgRef.current.cloneNode(true);
     clone.style.display = '';
     clone.removeAttribute('aria-hidden');
+    if (pixelSize) {
+      // Without a width and height the SVG has no pixel size, and iPhone
+      // Safari draws it at 300×150 and stretches that up, so the PNG came
+      // out blurry. With one it draws the vectors at full export size.
+      clone.setAttribute('width', pixelSize.width);
+      clone.setAttribute('height', pixelSize.height);
+      clone.removeAttribute('class');
+      clone.removeAttribute('style');
+    }
     return new XMLSerializer().serializeToString(clone);
   };
 
@@ -3445,10 +3454,10 @@ function App() {
 
   const handleExportPNG = () => {
     if (!svgRef.current) return;
-    const svgData = serializeBlueprint();
     const canvas = document.createElement("canvas");
-    canvas.width = 1920;
-    canvas.height = 960;
+    canvas.width = 2400;
+    canvas.height = 1200;
+    const svgData = serializeBlueprint({ width: canvas.width, height: canvas.height });
     const ctx = canvas.getContext("2d");
     const img = new Image();
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
@@ -3622,7 +3631,6 @@ function App() {
             fillRule="evenodd"
             stroke={isFlatBand ? bezelOutline : 'none'}
             strokeWidth={isFlatBand ? 0.15 : 0}
-            filter={isFlatBand ? undefined : "url(#drop-shadow)"}
           />
         </g>
       );
@@ -3710,7 +3718,7 @@ function App() {
 
         <header className="bg-gray-900 text-white px-4 sm:px-6 py-2.5 flex flex-nowrap sm:flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
           <div className="flex items-center gap-2.5 mr-auto min-w-0">
-            <span className="hidden min-[400px]:flex w-7 h-7 shrink-0 rounded-md bg-emerald-400/10 ring-1 ring-emerald-300/30 items-center justify-center">
+            <span className="flex w-7 h-7 shrink-0 rounded-md bg-emerald-400/10 ring-1 ring-emerald-300/30 items-center justify-center">
               <Gem className="w-4 h-4 text-emerald-300" />
             </span>
             <h1 className="text-[15px] font-semibold tracking-tight truncate">
@@ -3720,7 +3728,7 @@ function App() {
           </div>
 
           <div className="flex flex-nowrap sm:flex-wrap items-center gap-2 shrink-0">
-            <div className="flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
+            <div className="hidden sm:flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
               <button
                 onClick={undo}
                 disabled={historyCounts.undo === 0 && (historyRef.current.presentKey === null || designKey === historyRef.current.presentKey)}
@@ -3749,7 +3757,7 @@ function App() {
                 aria-label="Files"
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold ring-1 transition-colors ${isMenuOpen ? 'bg-white text-gray-900 ring-white' : 'bg-emerald-500 ring-emerald-500 text-white'}`}
               >
-                <Download className="w-4 h-4" /> <span className="hidden min-[400px]:inline">Files</span>
+                <Download className="w-4 h-4" /> Files
               </button>
               {isMenuOpen && (
                 <div id="file-menu" role="menu" className="absolute right-0 top-full mt-2 z-50 w-64 bg-white text-gray-800 rounded-xl shadow-xl ring-1 ring-gray-200 p-2 grid grid-cols-2 gap-1.5">
@@ -3850,7 +3858,7 @@ function App() {
                       openPanel === 'print' ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <Printer className="w-3.5 h-3.5" /> <span className="sm:hidden">Print</span><span className="hidden sm:inline">Print settings</span>
+                    <Printer className="w-3.5 h-3.5 [@media(pointer:coarse)]:w-4 [@media(pointer:coarse)]:h-4" /> <span className="hidden min-[400px]:inline sm:hidden">Print</span><span className="hidden sm:inline">Print settings</span>
                   </button>
                 )}
               </div>
@@ -3888,6 +3896,24 @@ function App() {
                     <span className="hidden sm:block w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
                   </div>
                 )}
+                <div className="sm:hidden flex items-center rounded-md bg-white ring-1 ring-gray-200 overflow-hidden divide-x divide-gray-200">
+                  <button
+                    onClick={undo}
+                    disabled={historyCounts.undo === 0 && (historyRef.current.presentKey === null || designKey === historyRef.current.presentKey)}
+                    aria-label="Undo"
+                    className="flex items-center px-2.5 py-2 text-gray-700 active:bg-gray-100 disabled:opacity-35"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={redo}
+                    disabled={historyCounts.redo === 0}
+                    aria-label="Redo"
+                    className="flex items-center px-2.5 py-2 text-gray-700 active:bg-gray-100 disabled:opacity-35"
+                  >
+                    <Redo2 className="w-4 h-4" />
+                  </button>
+                </div>
                 <button
                   onClick={() => togglePanel('display')}
                   aria-expanded={openPanel === 'display'}
@@ -4178,6 +4204,17 @@ function App() {
                 <filter id="part-shadow" x="-150%" y="-150%" width="400%" height="400%">
                   <feDropShadow dx="0" dy="0.18" stdDeviation="0.16" floodOpacity="0.35" />
                 </filter>
+                {/* Shadow only (no source graphic): drawn from every stone's
+                    silhouette in one layer beneath all stones, so a stone's
+                    shadow never falls on its neighbour and always points down
+                    whatever the stone's rotation. */}
+                <filter id="stones-shadow" filterUnits="userSpaceOnUse" x="-120" y="-80" width="240" height="160">
+                  <feGaussianBlur in="SourceAlpha" stdDeviation="0.5" />
+                  <feOffset dy="0.5" result="blur" />
+                  <feComponentTransfer>
+                    <feFuncA type="linear" slope="0.4" />
+                  </feComponentTransfer>
+                </filter>
               </defs>
 
               <rect x={-svgWidthMM/2} y={-svgHeightMM/2} width={svgWidthMM} height={svgHeightMM} fill="url(#largeGrid)" />
@@ -4234,6 +4271,25 @@ function App() {
                 );
               })()}
 
+              {!isFlatBand && (
+                <g filter="url(#stones-shadow)" aria-hidden="true">
+                  {renderedStones.map((stone) => {
+                    const w = Number(stone.width) || 0;
+                    const shape = stone.shape || 'Round Brilliant';
+                    const h = Number(stone.length) || w * (SHAPE_RATIOS[shape] || 1);
+                    const hw = w / 2;
+                    const hh = h / 2;
+                    const basePath = getShapePath(shape, hw, hh);
+                    return (
+                      <g key={`stone-shadow-${stone.id}`} transform={`translate(${stone.x}, ${stone.y}) rotate(${Number(stone.rotation) || 0})`}>
+                        <path d={basePath} fill="#000" />
+                        {stone.settingStyle && stone.settingStyle !== 'None' && renderSetting(stone, hw, hh, hw * 0.15, basePath)}
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
+
               {renderedStones.map((stone) => {
                 const w = Number(stone.width) || 0;
                 const shape = stone.shape || 'Round Brilliant';
@@ -4249,7 +4305,6 @@ function App() {
                   <g
                     key={`stone-svg-${stone.id}`}
                     transform={`translate(${stone.x}, ${stone.y})`}
-                    filter={isFlatBand ? undefined : "url(#drop-shadow)"}
                   >
                     <g transform={`rotate(${rotation})`}>
                       <path d={basePath} fill={stone.color} />

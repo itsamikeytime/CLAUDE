@@ -1,5 +1,15 @@
 # MikeyTime Ring Studio changelog
 
+## v1.4.2
+
+### Fixed
+- **Sharp PNG exports on phones.** PNGs saved on an iPhone came out blurry; they now render the drawing at full size. PNG exports are also larger (2400 × 1200, up from 1920 × 960).
+- **Bezel shadows follow the bezel.** A rotated bezel's shadow now turns with it instead of staying in place.
+- **Stones no longer shade each other in the 2D blueprint.** All stone and setting shadows are drawn in one layer beneath the stones, so when stones touch or overlap, one stone's shadow no longer smudges the stone next to it, and every shadow falls straight down.
+
+### Improved
+- **Undo and redo on phones** sit in the toolbar pinned at the top of the screen, so they're always in reach while you scroll through settings.
+
 ## v1.4.1
 
 ### Improved: phones and tablets
