@@ -148,7 +148,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.4.3';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -302,6 +302,16 @@ const getMetal = (name, customHex = DEFAULT_CUSTOM_METAL) => {
     return { gradient: 'url(#band-custom)', flat: hex, dark: shadeHex(hex, -0.35), hex };
   }
   return METAL_COLORS[name] || METAL_COLORS.gold;
+};
+// Stops of each metal's top-to-bottom shine (the #band-* gradients).
+const getMetalStops = (name, customHex) => {
+  if (name === 'custom') {
+    const hex = getMetal('custom', customHex).hex;
+    return [[0, shadeHex(hex, -0.12)], [20, shadeHex(hex, 0.45)], [50, hex], [80, shadeHex(hex, -0.45)], [100, shadeHex(hex, -0.12)]];
+  }
+  if (name === 'silver') return [[0, '#b5b6b8'], [20, '#ffffff'], [50, '#e3e4e5'], [80, '#8f9193'], [100, '#b5b6b8']];
+  if (name === 'black') return [[0, '#333333'], [20, '#666666'], [50, '#222222'], [80, '#0a0a0a'], [100, '#222222']];
+  return [[0, '#c5a059'], [20, '#f4e0a6'], [50, '#d4af37'], [80, '#8a6b1c'], [100, '#c5a059']];
 };
 const metalLabel = (name, customHex) => (name === 'custom' ? `Custom ${getMetal('custom', customHex).hex}` : `${name.charAt(0).toUpperCase()}${name.slice(1)}`);
 
@@ -3588,11 +3598,16 @@ function App() {
   const renderSetting = (stone, hw, hh, pSize, basePath) => {
     const { settingStyle: style, shape, bezelSize = 0.5, bezelColor = 'gold' } = stone;
 
+    // Settings are drawn inside the stone's rotated frame; their shine uses
+    // per-stone gradients (defined with the stone) that run straight down
+    // the screen like the band's, whatever the stone's rotation.
     const mColorBand = getMetal(bandColor, bandCustomColor);
-    const bandFill = isFlatBand ? mColorBand.flat : mColorBand.gradient;
+    const bandFill = isFlatBand ? mColorBand.flat : `url(#set-band-${stone.id})`;
     const mColorBezel = getMetal(bezelColor, bandCustomColor);
-    const bezelFill = isFlatBand ? mColorBezel.flat : mColorBezel.gradient;
+    const bezelFill = isFlatBand ? mColorBezel.flat : `url(#set-bezel-${stone.id})`;
     const bezelOutline = isFlatBand ? mColorBezel.dark : 'none';
+    // Round prongs keep their own small bead of shine.
+    const prongFill = isFlatBand ? mColorBand.flat : `url(#set-prong-${stone.id})`;
 
     if (style === 'Halo') {
       const hSize = stone.haloSize || 1.0;
@@ -3647,7 +3662,7 @@ function App() {
 
     if (style === '4-Prong' || style === '6-Prong') {
       const prongs = getProngPositions(style, shape, hw, hh);
-      return prongs.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />);
+      return prongs.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={pSize} fill={prongFill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />);
     }
 
     if (style === 'V-Prong') {
@@ -3661,7 +3676,7 @@ function App() {
             ))}
           </g>
           {vProngSpec.roundProngs.map((p, i) => (
-            <circle key={`vrnd-${i}`} cx={p.x} cy={p.y} r={pSize} fill={bandFill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />
+            <circle key={`vrnd-${i}`} cx={p.x} cy={p.y} r={pSize} fill={prongFill} filter={isFlatBand ? undefined : "url(#part-shadow)"} />
           ))}
         </g>
       );
@@ -4301,12 +4316,34 @@ function App() {
                 const basePath = getShapePath(shape, hw, hh);
                 const pSize = hw * 0.15;
 
+                // Reach of the setting from the stone's centre, for the shine.
+                const shineR = Math.max(hw, hh) + Math.max(Number(stone.bezelSize) || 0.5, Number(stone.haloSize) || 1) + 0.5;
+                const shineGradient = (id, metal) => (
+                  <linearGradient
+                    id={id}
+                    gradientUnits="userSpaceOnUse"
+                    x1="0" y1={-shineR} x2="0" y2={shineR}
+                    gradientTransform={`rotate(${-rotation})`}
+                  >
+                    {getMetalStops(metal, bandCustomColor).map(([o, c]) => <stop key={o} offset={`${o}%`} stopColor={c} />)}
+                  </linearGradient>
+                );
+
                 return (
                   <g
                     key={`stone-svg-${stone.id}`}
                     transform={`translate(${stone.x}, ${stone.y})`}
                   >
                     <g transform={`rotate(${rotation})`}>
+                      {!isFlatBand && (
+                        <defs>
+                          {shineGradient(`set-band-${stone.id}`, bandColor)}
+                          {shineGradient(`set-bezel-${stone.id}`, stone.bezelColor || 'gold')}
+                          <linearGradient id={`set-prong-${stone.id}`} x1="0" y1="0" x2="0" y2="1" gradientTransform={`rotate(${-rotation} 0.5 0.5)`}>
+                            {getMetalStops(bandColor, bandCustomColor).map(([o, c]) => <stop key={o} offset={`${o}%`} stopColor={c} />)}
+                          </linearGradient>
+                        </defs>
+                      )}
                       <path d={basePath} fill={stone.color} />
                       {(() => {
                         const facets = getFacetGeometry(shape, hw, hh);

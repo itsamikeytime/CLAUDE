@@ -1,5 +1,10 @@
 # MikeyTime Ring Studio changelog
 
+## v1.4.3
+
+### Fixed
+- **Consistent metal shine in the 2D blueprint.** Bezels, prongs, V-prongs and halo settings used a shine that turned with the stone, so a rotated bezel looked pale on one side and stones at different angles were lit from different directions. Every setting now shines top to bottom like the band, whatever the stone's rotation, and round prongs keep their own small highlight.
+
 ## v1.4.2
 
 ### Fixed
