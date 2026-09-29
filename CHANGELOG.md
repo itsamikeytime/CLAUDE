@@ -1,5 +1,18 @@
 # MikeyTime Ring Studio changelog
 
+## v1.4.1
+
+### Improved: phones and tablets
+- **The preview stays pinned at the top** while you scroll through Band Settings and the stones, so you see each change as you make it. The 2D blueprint starts at 2× zoom on phones.
+- **Bigger, easier sliders.** On touch screens, sliders have a large thumb and a taller grab area, and a vertical swipe that starts on a slider scrolls the page instead of changing the value.
+- **− and + buttons** beside every number on touch screens step it by one notch, for exact changes without dragging.
+- **No more zooming in when you tap a field.** Number boxes and dropdowns use a 16px font on touch screens, so iPhone doesn't zoom the page.
+- **Tap ⓘ for help.** The help text shows at the bottom of the screen when you tap an ⓘ icon, since phones can't hover.
+- **3D view:** taller on phones, drag with one finger to rotate, pinch to zoom, and the page no longer scrolls while you turn the ring. Camera (Top, 3/4, Side) and Explode buttons sit on the 3D view.
+- **Settings pop-ups open as bottom sheets** on phones, leaving the preview visible above them.
+- **Compact header:** undo/redo and a Files menu (Save, Load, PNG, SVG, BOM, 3MF, STL) fit on one row.
+- **Stone cards** put Width, Y-Offset and Rotation (and other paired controls) on their own rows on phones, with larger buttons for Stone/Color, Side and Size mode.
+
 ## v1.4.0
 
 ### New

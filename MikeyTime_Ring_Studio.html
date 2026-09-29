@@ -67,12 +67,50 @@
   img { max-width: 100%; }
   [hidden]:not([hidden=until-found i]) { display: none !important; }
   #root { min-height: 100vh; }
+
+  /* Touch screens: thumb-sized sliders, 16px fields (so iOS doesn't zoom in
+     when one is tapped) and steppers beside each number. A vertical swipe
+     that starts on a slider scrolls the page instead of moving it. */
+  .touch-only { display: none !important; }
+  @media (pointer: coarse) {
+    .touch-only { display: inline-flex !important; }
+    input[type="number"], input[type="text"], select { font-size: 16px !important; }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      height: 32px !important; background: transparent !important;
+      touch-action: pan-y; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: #d9dce1; }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 26px; height: 26px; margin-top: -10px; border-radius: 50%;
+      background: #0d7355; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    }
+    input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: #d9dce1; }
+    input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #0d7355; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
+    input[type="range"]:disabled::-webkit-slider-thumb { background: #9aa0a8; }
+    input[type="checkbox"] { width: 20px !important; height: 20px !important; }
+  }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+const useMediaQuery = (query) => {
+  const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [matches, setMatches] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const onChange = () => setMatches(mq.matches);
+    onChange();
+    mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange);
+    return () => (mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange));
+  }, [query]);
+  return matches;
+};
 
 /* Inline icon shims standing in for lucide-react (not loadable as an ES import in a static page). */
 const IconBase = ({ children, className }) => (
@@ -110,7 +148,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -281,12 +319,38 @@ const commitTypedNumber = (value, min) => {
 };
 const blurOnEnter = (e) => { if (e.key === 'Enter') e.currentTarget.blur(); };
 
-// A small info icon whose hover text explains the control next to it.
+// A small info icon whose hover text explains the control next to it. On a
+// touch screen, tapping it shows the text at the bottom of the screen.
+const showHint = (text) => window.dispatchEvent(new CustomEvent('ringstudio:hint', { detail: text }));
 const Hint = ({ text }) => text ? (
-  <span title={text} aria-label={text} role="img" className="inline-flex text-gray-400 hover:text-emerald-600 cursor-help shrink-0">
-    <Info className="w-3 h-3" />
-  </span>
+  <button
+    type="button"
+    title={text}
+    aria-label={`Help: ${text}`}
+    onClick={(e) => { e.preventDefault(); e.stopPropagation(); showHint(text); }}
+    className="inline-flex items-center justify-center text-gray-400 hover:text-emerald-600 cursor-help shrink-0 -m-1.5 p-1.5 [@media(pointer:coarse)]:-m-2 [@media(pointer:coarse)]:p-2"
+  >
+    <Info className="w-3 h-3 [@media(pointer:coarse)]:w-3.5 [@media(pointer:coarse)]:h-3.5" />
+  </button>
 ) : null;
+
+// Steps a number by one slider step (touch screens show − and + buttons).
+const stepNumber = (value, step, dir, min) => {
+  const decimals = (String(step).split('.')[1] || '').length;
+  const n = Number(((Number(value) || 0) + dir * step).toFixed(decimals));
+  return min >= 0 ? Math.max(min, n) : n;
+};
+const StepButton = ({ dir, onClick, disabled, label }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    aria-label={label}
+    className="touch-only w-9 h-9 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-gray-300 text-lg font-semibold text-gray-700 active:bg-emerald-50 disabled:opacity-40"
+  >
+    {dir < 0 ? '−' : '+'}
+  </button>
+);
 
 const ControlSlider = ({ label, icon: Icon, value, min, max, step = 0.25, onChange, unit = 'mm', hint }) => (
   <div className="flex flex-col gap-1.5 mb-1" title={hint}>
@@ -301,15 +365,20 @@ const ControlSlider = ({ label, icon: Icon, value, min, max, step = 0.25, onChan
         onChange={(e) => onChange(Number(e.target.value))}
         className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
       />
-      <div className="flex items-center bg-white border border-gray-200 rounded overflow-hidden focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 shrink-0">
-        <input
-          type="number" min={min >= 0 ? min : undefined} step={step} value={value}
-          onChange={(e) => { const val = e.target.value; onChange(val === '' ? '' : Number(val)); }}
-          onBlur={() => onChange(commitTypedNumber(value, min))}
-          onKeyDown={blurOnEnter}
-          className="w-14 px-1.5 py-0.5 text-xs bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
-        />
-        <span className="text-[10px] font-bold text-gray-500 pr-1.5 bg-white">{unit}</span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <StepButton dir={-1} label={`Decrease ${label}`} onClick={() => onChange(stepNumber(value, step, -1, min))} />
+        <div className="flex items-center bg-white border border-gray-200 rounded overflow-hidden focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500">
+          <input
+            type="number" inputMode="decimal" min={min >= 0 ? min : undefined} step={step} value={value}
+            onChange={(e) => { const val = e.target.value; onChange(val === '' ? '' : Number(val)); }}
+            onBlur={() => onChange(commitTypedNumber(value, min))}
+            onKeyDown={blurOnEnter}
+            aria-label={label}
+            className="w-14 [@media(pointer:coarse)]:w-16 px-1.5 py-0.5 [@media(pointer:coarse)]:py-1 text-xs bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
+          />
+          <span className="text-[10px] font-bold text-gray-500 pr-1.5 bg-white">{unit}</span>
+        </div>
+        <StepButton dir={1} label={`Increase ${label}`} onClick={() => onChange(stepNumber(value, step, 1, min))} />
       </div>
     </div>
   </div>
@@ -319,15 +388,20 @@ const CompactControl = ({ label, value, min, max, step = 0.25, onChange, disable
   <div className={`flex flex-col gap-1.5 ${disabled ? 'opacity-40 grayscale pointer-events-none' : ''}`} title={hint}>
     <div className="flex items-center justify-between gap-1">
       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1 min-w-0">{label}<Hint text={hint} /></span>
-      <div className="flex items-center border border-gray-200 rounded overflow-hidden bg-gray-50">
-        <input
-          type="number" min={min >= 0 ? min : undefined} step={step} value={value}
-          onChange={(e) => { const val = e.target.value; onChange(val === '' ? '' : Number(val)); }}
-          onBlur={() => onChange(commitTypedNumber(value, min))}
-          onKeyDown={blurOnEnter}
-          disabled={disabled}
-          className="w-14 text-xs py-0.5 px-1 bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
-        />
+      <div className="flex items-center gap-1.5 shrink-0">
+        <StepButton dir={-1} label={`Decrease ${label}`} disabled={disabled} onClick={() => onChange(stepNumber(value, step, -1, min))} />
+        <div className="flex items-center border border-gray-200 rounded overflow-hidden bg-gray-50">
+          <input
+            type="number" inputMode="decimal" min={min >= 0 ? min : undefined} step={step} value={value}
+            onChange={(e) => { const val = e.target.value; onChange(val === '' ? '' : Number(val)); }}
+            onBlur={() => onChange(commitTypedNumber(value, min))}
+            onKeyDown={blurOnEnter}
+            disabled={disabled}
+            aria-label={label}
+            className="w-14 [@media(pointer:coarse)]:w-16 text-xs py-0.5 [@media(pointer:coarse)]:py-1 px-1 bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
+          />
+        </div>
+        <StepButton dir={1} label={`Increase ${label}`} disabled={disabled} onClick={() => onChange(stepNumber(value, step, 1, min))} />
       </div>
     </div>
     <input
@@ -2777,7 +2851,16 @@ const Ring3DPreviewCanvas = ({
     ctx.putImageData(imgData, 0, 0);
   }, [shells, rotX, rotY, camZoom, explodeParts, canvasSize]);
 
+  // Two fingers pinch to zoom; one finger (or the mouse) rotates.
+  const pinchRef = useRef(null);
+  const touchDistance = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
   const handlePointerDown = (e) => {
+    if (e.touches && e.touches.length >= 2) {
+      pinchRef.current = { dist: touchDistance(e.touches), zoom: camZoom };
+      setIsDragging(false);
+      return;
+    }
     setIsDragging(true);
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -2785,6 +2868,11 @@ const Ring3DPreviewCanvas = ({
   };
 
   const handlePointerMove = (e) => {
+    if (e.touches && e.touches.length >= 2 && pinchRef.current) {
+      const ratio = touchDistance(e.touches) / Math.max(1, pinchRef.current.dist);
+      setCamZoom(Math.max(0.5, Math.min(3.2, Number((pinchRef.current.zoom * ratio).toFixed(2)))));
+      return;
+    }
     if (!isDragging) return;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -2795,7 +2883,18 @@ const Ring3DPreviewCanvas = ({
     setRotX(prev => Math.max(-89, Math.min(89, prev + dy * 0.65)));
   };
 
-  const handlePointerUp = () => setIsDragging(false);
+  const handlePointerUp = (e) => {
+    if (e && e.touches && e.touches.length === 1 && pinchRef.current) {
+      // One finger lifted from a pinch: carry on rotating with the other.
+      pinchRef.current = null;
+      setIsDragging(true);
+      lastPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      return;
+    }
+    pinchRef.current = null;
+    setIsDragging(false);
+  };
+  const isNarrow = useMediaQuery('(max-width: 639px)');
 
   const handleWheel = (e) => {
     e.preventDefault();
@@ -2816,10 +2915,11 @@ const Ring3DPreviewCanvas = ({
         onTouchStart={handlePointerDown}
         onTouchMove={handlePointerMove}
         onTouchEnd={handlePointerUp}
+        onTouchCancel={handlePointerUp}
         onWheel={handleWheel}
-        aria-label="3D ring preview. Drag to rotate, scroll to zoom."
+        aria-label="3D ring preview. Drag to rotate, scroll or pinch to zoom."
         className="block w-full h-auto rounded-lg ring-1 ring-stage-line shadow-sm bg-stage cursor-grab active:cursor-grabbing"
-        style={{ maxHeight: '35vh', aspectRatio: '920 / 360' }}
+        style={{ maxHeight: isNarrow ? '32vh' : '35vh', aspectRatio: isNarrow ? '4 / 3' : '920 / 360', touchAction: 'none' }}
       />
     </div>
   );
@@ -2856,14 +2956,15 @@ const PopPanel = ({ id, title, icon: Icon, align = 'left', onClose, children }) 
     id={id}
     role="dialog"
     aria-label={title}
-    className={`absolute top-full mt-2 ${align === 'right' ? 'right-0' : 'left-0'} z-30 w-[min(23rem,100%)] max-h-[min(72vh,40rem)] overflow-y-auto bg-white rounded-xl shadow-xl ring-1 ring-gray-200 p-4 flex flex-col gap-3`}
+    className={`fixed inset-x-0 bottom-0 z-40 max-h-[55vh] rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_-12px_rgba(23,25,30,0.45)] sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:mt-2 ${align === 'right' ? 'sm:right-0' : 'sm:left-0'} sm:w-[min(23rem,100%)] sm:max-h-[min(72vh,40rem)] sm:rounded-xl sm:pb-4 sm:shadow-xl overflow-y-auto overscroll-contain bg-white ring-1 ring-gray-200 p-4 flex flex-col gap-3`}
   >
+    <div className="sm:hidden mx-auto -mt-1.5 mb-0.5 w-10 h-1.5 rounded-full bg-gray-300" aria-hidden="true" />
     <div className="flex items-center justify-between gap-2">
       <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
         <Icon className="w-4 h-4 text-emerald-600" /> {title}
       </h3>
-      <button onClick={onClose} aria-label={`Close ${title.toLowerCase()}`} className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100">
-        <X className="w-4 h-4" />
+      <button onClick={onClose} aria-label={`Close ${title.toLowerCase()}`} className="p-1 [@media(pointer:coarse)]:p-2 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+        <X className="w-4 h-4 [@media(pointer:coarse)]:w-5 [@media(pointer:coarse)]:h-5" />
       </button>
     </div>
     {children}
@@ -2872,7 +2973,8 @@ const PopPanel = ({ id, title, icon: Icon, align = 'left', onClose, children }) 
 
 function App() {
   const [canvasViewMode, setCanvasViewMode] = useState('2d');
-  const [zoom, setZoom] = useState(1);
+  // Phones start zoomed in so the band isn't a thin line across the screen.
+  const [zoom, setZoom] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 2 : 1));
   const [bandColor, setBandColor] = useState('gold');
   const [bandCustomColor, setBandCustomColor] = useState(DEFAULT_CUSTOM_METAL);
   const [bandWidth, setBandWidth] = useState(4);
@@ -2908,6 +3010,7 @@ function App() {
   // Which preview pop-up is open: 'display', 'print' or null.
   const [openPanel, setOpenPanel] = useState(null);
   const togglePanel = (id) => setOpenPanel(prev => (prev === id ? null : id));
+  const isNarrow = useMediaQuery('(max-width: 639px)');
   const panelBarRef = useRef(null);
   useEffect(() => {
     if (!openPanel) return;
@@ -2938,6 +3041,23 @@ function App() {
   };
 
   const [errorMessage, setErrorMessage] = useState('');
+  const [hintText, setHintText] = useState('');
+  useEffect(() => {
+    let timer;
+    const onHint = (e) => { setHintText(e.detail); clearTimeout(timer); timer = setTimeout(() => setHintText(''), 7000); };
+    window.addEventListener('ringstudio:hint', onHint);
+    return () => { window.removeEventListener('ringstudio:hint', onHint); clearTimeout(timer); };
+  }, []);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const onPointer = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsMenuOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setIsMenuOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
+  }, [isMenuOpen]);
   const fileInputRef = useRef(null);
   const svgRef = useRef(null);
 
@@ -3570,49 +3690,92 @@ function App() {
   }
 
   return (
-    <div className="h-screen bg-gray-100 flex flex-col font-sans overflow-hidden">
+    <div className="min-h-screen md:h-screen bg-gray-100 flex flex-col font-sans md:overflow-hidden">
 
-      <div className="shrink-0 z-10 flex flex-col relative">
+      {/* Phones: the page scrolls and the preview stays pinned at the top.
+          Larger screens: header and preview are fixed and the settings scroll. */}
+      <div className="contents md:flex md:shrink-0 md:z-10 md:flex-col md:relative">
         {errorMessage && (
-          <div role="alert" className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg shadow-lg flex items-center gap-2 z-50">
-            <AlertCircle className="w-4 h-4" /> {errorMessage}
+          <div role="alert" className="fixed top-4 left-1/2 -translate-x-1/2 w-max max-w-[calc(100vw-2rem)] px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg shadow-lg flex items-center gap-2 z-50">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {errorMessage}
+          </div>
+        )}
+        {hintText && (
+          <div role="status" className="fixed inset-x-4 bottom-4 mx-auto max-w-md z-50 bg-gray-900 text-white text-sm rounded-xl shadow-xl px-4 py-3 flex items-start gap-3" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <Info className="w-4 h-4 mt-0.5 shrink-0 text-emerald-300" />
+            <span className="flex-1 leading-snug">{hintText}</span>
+            <button onClick={() => setHintText('')} aria-label="Close help" className="-m-1 p-1 text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
           </div>
         )}
 
-        <header className="bg-gray-900 text-white px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2.5 mr-auto">
-            <span className="w-7 h-7 rounded-md bg-emerald-400/10 ring-1 ring-emerald-300/30 flex items-center justify-center">
+        <header className="bg-gray-900 text-white px-4 sm:px-6 py-2.5 flex flex-nowrap sm:flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2.5 mr-auto min-w-0">
+            <span className="hidden min-[400px]:flex w-7 h-7 shrink-0 rounded-md bg-emerald-400/10 ring-1 ring-emerald-300/30 items-center justify-center">
               <Gem className="w-4 h-4 text-emerald-300" />
             </span>
-            <h1 className="text-[15px] font-semibold tracking-tight">
-              MikeyTime <span className="font-normal text-gray-400">Ring Studio</span>
+            <h1 className="text-[15px] font-semibold tracking-tight truncate">
+              MikeyTime <span className="hidden min-[480px]:inline font-normal text-gray-400">Ring Studio</span>
             </h1>
-            <span className="text-[10px] font-mono tabular text-gray-400 ring-1 ring-white/15 rounded px-1.5 py-0.5" title="App version">v{APP_VERSION}</span>
+            <span className="shrink-0 text-[10px] font-mono tabular text-gray-400 ring-1 ring-white/15 rounded px-1.5 py-0.5" title="App version">v{APP_VERSION}</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-nowrap sm:flex-wrap items-center gap-2 shrink-0">
             <div className="flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
               <button
                 onClick={undo}
                 disabled={historyCounts.undo === 0 && (historyRef.current.presentKey === null || designKey === historyRef.current.presentKey)}
                 title="Undo (Ctrl/⌘+Z)"
                 aria-label="Undo"
-                className="flex items-center px-2.5 py-1.5 text-gray-200 hover:bg-white/10 disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+                className="flex items-center px-2.5 py-1.5 [@media(pointer:coarse)]:px-3 [@media(pointer:coarse)]:py-2 text-gray-200 hover:bg-white/10 disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
               >
-                <Undo2 className="w-3.5 h-3.5" />
+                <Undo2 className="w-3.5 h-3.5 [@media(pointer:coarse)]:w-4 [@media(pointer:coarse)]:h-4" />
               </button>
               <button
                 onClick={redo}
                 disabled={historyCounts.redo === 0}
                 title="Redo (Ctrl/⌘+Shift+Z)"
                 aria-label="Redo"
-                className="flex items-center px-2.5 py-1.5 text-gray-200 hover:bg-white/10 disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
+                className="flex items-center px-2.5 py-1.5 [@media(pointer:coarse)]:px-3 [@media(pointer:coarse)]:py-2 text-gray-200 hover:bg-white/10 disabled:opacity-35 disabled:hover:bg-transparent transition-colors"
               >
-                <Redo2 className="w-3.5 h-3.5" />
+                <Redo2 className="w-3.5 h-3.5 [@media(pointer:coarse)]:w-4 [@media(pointer:coarse)]:h-4" />
               </button>
             </div>
 
-            <div className="flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
+            <div ref={menuRef} className="relative sm:hidden">
+              <button
+                onClick={() => setIsMenuOpen(o => !o)}
+                aria-expanded={isMenuOpen}
+                aria-controls="file-menu"
+                aria-label="Files"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold ring-1 transition-colors ${isMenuOpen ? 'bg-white text-gray-900 ring-white' : 'bg-emerald-500 ring-emerald-500 text-white'}`}
+              >
+                <Download className="w-4 h-4" /> <span className="hidden min-[400px]:inline">Files</span>
+              </button>
+              {isMenuOpen && (
+                <div id="file-menu" role="menu" className="absolute right-0 top-full mt-2 z-50 w-64 bg-white text-gray-800 rounded-xl shadow-xl ring-1 ring-gray-200 p-2 grid grid-cols-2 gap-1.5">
+                  {[
+                    { label: 'Save design', Icon: Download, run: handleExportConfig },
+                    { label: 'Load design', Icon: Upload, run: () => fileInputRef.current?.click() },
+                    { label: 'PNG image', Icon: ImageIcon, run: handleExportPNG },
+                    { label: 'SVG vector', Icon: FileCode2, run: handleExportSVG },
+                    { label: 'BOM (CSV)', Icon: Table, run: handleExportCSV },
+                    { label: '3MF', Icon: PackageCheck, run: handleExport3MF },
+                    { label: 'STL', Icon: Printer, run: handleExportSTL, primary: true }
+                  ].map(({ label, Icon, run, primary }) => (
+                    <button
+                      key={label}
+                      role="menuitem"
+                      onClick={() => { setIsMenuOpen(false); run(); }}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-left ${primary ? 'bg-emerald-600 text-white col-span-2 justify-center font-semibold' : 'bg-gray-50 hover:bg-gray-100 ring-1 ring-gray-200'}`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" /> {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="hidden sm:flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
               <button onClick={handleExportConfig} title="Save this design as a file" className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-200 hover:bg-white/10 transition-colors">
                 <Download className="w-3.5 h-3.5" /> Save
               </button>
@@ -3622,7 +3785,7 @@ function App() {
               <input type="file" accept=".txt" ref={fileInputRef} onChange={handleImportConfig} className="hidden" />
             </div>
 
-            <div className="flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
+            <div className="hidden sm:flex items-center rounded-md ring-1 ring-white/15 overflow-hidden divide-x divide-white/15">
               <button onClick={handleExportPNG} title="Export the 2D blueprint as a PNG image" className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-200 hover:bg-white/10 transition-colors">
                 <ImageIcon className="w-3.5 h-3.5" /> PNG
               </button>
@@ -3634,7 +3797,7 @@ function App() {
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="hidden sm:flex items-center gap-1.5">
               <button
                 onClick={handleExport3MF}
                 title="Export a multi-object 3MF with named parts (OrcaSlicer, Bambu Studio, Anycubic)"
@@ -3653,8 +3816,8 @@ function App() {
           </div>
         </header>
 
-        <section aria-label="Ring preview" className="bg-white border-b border-gray-200 shadow-[0_1px_0_rgba(23,25,30,0.04),0_8px_24px_-18px_rgba(23,25,30,0.35)] px-3 sm:px-6 pt-3 pb-2.5">
-          <div className="max-w-5xl mx-auto flex flex-col gap-2.5">
+        <section aria-label="Ring preview" className="sticky top-0 z-20 md:static bg-white border-b border-gray-200 shadow-[0_1px_0_rgba(23,25,30,0.04),0_8px_24px_-18px_rgba(23,25,30,0.35)] px-3 sm:px-6 pt-2.5 sm:pt-3 pb-2 sm:pb-2.5">
+          <div className="max-w-5xl mx-auto flex flex-col gap-2 sm:gap-2.5">
             <div ref={panelBarRef} className="relative flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <div role="tablist" aria-label="Preview mode" className="inline-flex p-1 rounded-lg bg-gray-100 ring-1 ring-gray-200">
@@ -3667,11 +3830,12 @@ function App() {
                       role="tab"
                       aria-selected={canvasViewMode === id}
                       onClick={() => { setCanvasViewMode(id); if (id === '2d' && openPanel === 'print') setOpenPanel(null); }}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-semibold transition-colors ${
+                      aria-label={label}
+                      className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 [@media(pointer:coarse)]:py-2 rounded-md text-[13px] font-semibold transition-colors ${
                         canvasViewMode === id ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-white'
                       }`}
                     >
-                      <Icon className="w-4 h-4" /> {label}
+                      <Icon className="w-4 h-4" /> <span className="sm:hidden">{id.toUpperCase()}</span><span className="hidden sm:inline">{label}</span>
                     </button>
                   ))}
                 </div>
@@ -3681,18 +3845,19 @@ function App() {
                     aria-expanded={openPanel === 'print'}
                     aria-controls="print-settings-panel"
                     title="3D print settings: stone depth, setting height, sockets, cutout mode and export"
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold ring-1 transition-colors ${
+                    aria-label="Print settings"
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 [@media(pointer:coarse)]:py-2.5 rounded-md text-xs font-semibold ring-1 transition-colors ${
                       openPanel === 'print' ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <Printer className="w-3.5 h-3.5" /> Print settings
+                    <Printer className="w-3.5 h-3.5" /> <span className="sm:hidden">Print</span><span className="hidden sm:inline">Print settings</span>
                   </button>
                 )}
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5 ml-auto">
                 {canvasViewMode === '3d' && (
-                  <>
+                  <div className="hidden sm:contents">
                     <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500 mr-0.5">Camera</span>
                     {[
                       { name: 'Crown', label: 'Top', args: [0, 0, 1.35] },
@@ -3702,24 +3867,26 @@ function App() {
                       <button
                         key={name}
                         onClick={() => apply3DCameraPreset(name, ...args)}
-                        className="px-2.5 py-1 rounded-md bg-white ring-1 ring-gray-200 hover:ring-gray-300 hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors"
+                        aria-label={`${label} camera view`}
+                        className="px-2.5 py-1 [@media(pointer:coarse)]:py-2 rounded-md bg-white ring-1 ring-gray-200 hover:ring-gray-300 hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors"
                       >
                         {label}
                       </button>
                     ))}
-                    <span className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+                    <span className="hidden sm:block w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
                     <button
                       aria-pressed={explode3DParts > 0}
+                      aria-label="Explode parts"
                       onClick={() => setExplode3DParts(prev => (prev === 0 ? 1 : 0))}
                       title="Pull stones and settings away from the band to inspect the separate print parts"
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ring-1 transition-colors ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1 [@media(pointer:coarse)]:py-2 rounded-md text-xs font-semibold ring-1 transition-colors ${
                         explode3DParts > 0 ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      <Layers className="w-3.5 h-3.5" /> {explode3DParts > 0 ? 'Exploded' : 'Explode parts'}
+                      <Layers className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{explode3DParts > 0 ? 'Exploded' : 'Explode parts'}</span>
                     </button>
-                    <span className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
-                  </>
+                    <span className="hidden sm:block w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+                  </div>
                 )}
                 <button
                   onClick={() => togglePanel('display')}
@@ -3727,7 +3894,7 @@ function App() {
                   aria-controls="display-settings-panel"
                   aria-label="Display settings"
                   title="Display settings: rulers, measurement overlays, shadows and the measurements readout"
-                  className={`p-1.5 rounded-md ring-1 transition-colors ${
+                  className={`p-1.5 [@media(pointer:coarse)]:p-2 rounded-md ring-1 transition-colors ${
                     openPanel === 'display' ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }`}
                 >
@@ -3855,7 +4022,7 @@ function App() {
                           key={mode.id}
                           onClick={() => setCutoutMode(mode.id)}
                           title={mode.hint}
-                          className={`py-1.5 px-1.5 rounded text-[10px] font-bold transition-all ${
+                          className={`py-1.5 [@media(pointer:coarse)]:py-2.5 px-1.5 rounded text-[10px] font-bold transition-all ${
                             cutoutMode === mode.id
                               ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
                               : 'text-gray-500 hover:text-gray-800'
@@ -3907,6 +4074,32 @@ function App() {
               explodeParts={explode3DParts}
             />
           )}
+          {canvasViewMode === '3d' && (
+            <div className="sm:hidden absolute left-2 bottom-2 flex items-center gap-1.5" role="group" aria-label="Camera">
+              {[
+                { name: 'Crown', label: 'Top', args: [0, 0, 1.35] },
+                { name: '3/4', label: '3/4', args: [35, -22, 1.2] },
+                { name: 'Profile', label: 'Side', args: [82, 0, 1.15] }
+              ].map(({ name, label, args }) => (
+                <button
+                  key={name}
+                  onClick={() => apply3DCameraPreset(name, ...args)}
+                  aria-label={`${label} camera view`}
+                  className="px-3 py-2 rounded-lg bg-white/85 backdrop-blur text-xs font-semibold text-gray-800 shadow-sm ring-1 ring-black/10"
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                aria-pressed={explode3DParts > 0}
+                aria-label="Explode parts"
+                onClick={() => setExplode3DParts(prev => (prev === 0 ? 1 : 0))}
+                className={`p-2 rounded-lg shadow-sm ring-1 ${explode3DParts > 0 ? 'bg-emerald-600 text-white ring-emerald-700' : 'bg-white/85 backdrop-blur text-gray-800 ring-black/10'}`}
+              >
+                <Layers className="w-4 h-4" />
+              </button>
+            </div>
+          )}
             {/* The blueprint stays on the page in 3D view (just hidden), so the
                 PNG and SVG exports work from either view. */}
             <svg
@@ -3914,7 +4107,7 @@ function App() {
               ref={svgRef}
               viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`}
               className="w-full max-w-5xl h-auto bg-gray-50 ring-1 ring-gray-200 rounded-lg cursor-crosshair"
-              style={{ maxHeight: '35vh', display: canvasViewMode === '3d' ? 'none' : undefined }}
+              style={{ maxHeight: isNarrow ? '30vh' : '35vh', display: canvasViewMode === '3d' ? 'none' : undefined }}
               aria-hidden={canvasViewMode === '3d' ? true : undefined}
             >
               <defs>
@@ -4252,22 +4445,22 @@ function App() {
 
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1">
               {canvasViewMode === '2d' ? (
-                <div className="flex items-center gap-2" title="Zoom the blueprint in or out">
+                <div className="flex items-center gap-2 flex-1 sm:flex-none" title="Zoom the blueprint in or out">
                   <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500">Zoom</span>
-                  <button onClick={() => setZoom(z => Math.max(1, Number((Number(z) - 0.5).toFixed(2))))} aria-label="Zoom out" className="w-6 h-6 rounded-md bg-white ring-1 ring-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">−</button>
+                  <button onClick={() => setZoom(z => Math.max(1, Number((Number(z) - 0.5).toFixed(2))))} aria-label="Zoom out" className="w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-md bg-white ring-1 ring-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">−</button>
                   <input
                     type="range" min={1} max={Math.max(10, Number(zoom) || 1)} step={0.25} value={zoom}
                     onChange={(e) => setZoom(Number(e.target.value))}
                     aria-label="Canvas zoom"
-                    className="w-28 sm:w-40 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    className="flex-1 min-w-[5rem] sm:flex-none w-28 sm:w-40 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                   />
-                  <button onClick={() => setZoom(z => Number((Number(z) + 0.5).toFixed(2)))} aria-label="Zoom in" className="w-6 h-6 rounded-md bg-white ring-1 ring-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">+</button>
+                  <button onClick={() => setZoom(z => Number((Number(z) + 0.5).toFixed(2)))} aria-label="Zoom in" className="w-6 h-6 [@media(pointer:coarse)]:w-9 [@media(pointer:coarse)]:h-9 rounded-md bg-white ring-1 ring-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">+</button>
                   <span className="text-xs font-mono tabular text-gray-700 min-w-[3rem]">{Number(zoom).toFixed(2)}×</span>
                 </div>
               ) : (
-                <span className="text-[11px] text-gray-500">Drag to rotate · scroll to zoom</span>
+                <span className="text-[11px] text-gray-500"><span className="[@media(pointer:coarse)]:hidden">Drag to rotate · scroll to zoom</span><span className="hidden [@media(pointer:coarse)]:inline">Drag to rotate · pinch to zoom</span></span>
               )}
-              {canvasViewMode === '2d' && <span className="text-[11px] text-gray-400">Grid: 1 mm minor, 10 mm major</span>}
+              {canvasViewMode === '2d' && <span className="hidden sm:inline text-[11px] text-gray-400">Grid: 1 mm minor, 10 mm major</span>}
             </div>
 
             {showStats && (
@@ -4283,15 +4476,15 @@ function App() {
         </section>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth">
+      <div className="flex-1 md:overflow-y-auto p-3 sm:p-6 scroll-smooth">
         <div className="max-w-7xl mx-auto space-y-6">
 
           <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all">
             <div
               onClick={() => setIsGlobalSettingsOpen(prev => !prev)}
-              className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3.5 bg-white hover:bg-gray-50/80 cursor-pointer select-none border-b border-gray-100 gap-3 transition-colors"
+              className="flex flex-row items-center justify-between px-4 sm:px-5 py-3.5 bg-white hover:bg-gray-50/80 cursor-pointer select-none border-b border-gray-100 gap-3 transition-colors"
             >
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0">
                 <div className="flex items-center gap-2">
                   <RingBand className="w-5 h-5 text-emerald-600" />
                   <h2 className="text-[15px] font-semibold text-gray-900">
@@ -4313,7 +4506,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between md:justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-end gap-3 shrink-0 self-start md:self-center" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setIsGlobalSettingsOpen(prev => !prev)}
                   aria-expanded={isGlobalSettingsOpen}
@@ -4326,7 +4519,7 @@ function App() {
             </div>
 
             {isGlobalSettingsOpen && (
-              <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6 items-start bg-white">
+              <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-3 gap-6 items-start bg-white">
                 <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-3.5">
                   <div>
                     <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1">
@@ -4339,7 +4532,7 @@ function App() {
                           key={metal}
                           onClick={() => setBandColor(metal)}
                           aria-pressed={bandColor === metal}
-                          className={`py-1.5 px-3 rounded-md font-medium text-sm capitalize transition-all border-2 ${
+                          className={`py-1.5 [@media(pointer:coarse)]:py-2.5 px-3 rounded-md font-medium text-sm capitalize transition-all border-2 ${
                             bandColor === metal
                               ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-sm'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
@@ -4400,7 +4593,7 @@ function App() {
                         role="radio"
                         aria-checked={bandProfile === bp.id}
                         onClick={() => { if (bp.id !== bandProfile) { setBandProfile(bp.id); setBandProfileSize(null); } }}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-xs font-semibold transition-all ${
+                        className={`flex items-center justify-center gap-1.5 py-1.5 [@media(pointer:coarse)]:py-2.5 px-2 rounded text-xs font-semibold transition-all ${
                           bandProfile === bp.id ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-gray-500 hover:text-gray-800'
                         }`}
                       >
@@ -4467,7 +4660,7 @@ function App() {
                   <button
                     onClick={() => setLayoutMode('cluster')}
                     title="Stone 1 is the center anchor; other stones are placed by side and distance from center"
-                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
+                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 [@media(pointer:coarse)]:py-2 rounded-md font-bold text-xs transition-all ${
                       layoutMode === 'cluster' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
                     }`}
                   >
@@ -4477,7 +4670,7 @@ function App() {
                   <button
                     onClick={() => setLayoutMode('scatter')}
                     title="Stones sit in a row, each spaced by its gap from the previous stone"
-                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-bold text-xs transition-all ${
+                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 [@media(pointer:coarse)]:py-2 rounded-md font-bold text-xs transition-all ${
                       layoutMode === 'scatter' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-800'
                     }`}
                   >
@@ -4495,7 +4688,7 @@ function App() {
 
                 return (
                   <div key={stone.id} className="flex flex-col gap-1.5 relative">
-                    <div className="flex justify-between items-center px-1">
+                    <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-1 px-1">
                       {(() => {
                         const desc = `${stone.shape} ${stone.colorMode === 'custom' ? 'Custom Gemstone' : (stone.preset || 'Diamond')}`;
                         const anchor = index === 0 && layoutMode === 'cluster';
@@ -4507,7 +4700,7 @@ function App() {
                           </span>
                         );
                       })()}
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-3 shrink-0 ml-auto">
                         {index > 0 && (
                           <div className="flex items-center gap-1">
                             <LinkIcon className={`w-3.5 h-3.5 ${isLinked ? 'text-emerald-500' : 'text-gray-400'}`} />
@@ -4531,7 +4724,7 @@ function App() {
                         {stones.length > 1 && (
                           <button
                             onClick={() => removeSpecificStone(stone.id)}
-                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded px-2 py-0.5 text-xs font-semibold flex items-center gap-1 transition-colors"
+                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded px-2 py-0.5 [@media(pointer:coarse)]:py-2 text-xs font-semibold flex items-center gap-1 transition-colors"
                           >
                             <X className="w-3 h-3" /> Remove
                           </button>
@@ -4539,7 +4732,7 @@ function App() {
                       </div>
                     </div>
 
-                    <div className={`bg-white rounded-xl p-4 shadow-sm border transition-all flex flex-col gap-4 relative overflow-hidden ${isLinked ? 'border-emerald-200 bg-emerald-50/10' : 'border-gray-200 hover:border-emerald-300'}`}>
+                    <div className={`bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border transition-all flex flex-col gap-4 relative overflow-hidden ${isLinked ? 'border-emerald-200 bg-emerald-50/10' : 'border-gray-200 hover:border-emerald-300'}`}>
                       {isLinked && (
                         <div className="absolute inset-0 bg-gray-50/40 z-10 pointer-events-none" />
                       )}
@@ -4575,8 +4768,8 @@ function App() {
                         </ul>
                       )}
 
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="flex flex-col gap-1.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">Shape<Hint text="The stone's cut. Each cut has its own outline, facet drawing and standard depth." /></span>
                           <select
                             disabled={isLinked}
@@ -4590,7 +4783,7 @@ function App() {
 
                         <div className="flex flex-col gap-1.5">
                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">Mode<Hint text="Stone: pick a gemstone. Color: pick any color with the color picker." /></span>
-                          <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[28px] ${isLinked ? 'opacity-75' : ''}`}>
+                          <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[28px] [@media(pointer:coarse)]:h-[38px] ${isLinked ? 'opacity-75' : ''}`}>
                             <button
                               disabled={isLinked}
                               className={`flex-1 text-[9px] font-bold rounded uppercase transition-colors ${stone.colorMode === 'preset' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -4622,7 +4815,7 @@ function App() {
                               {Object.keys(PRESET_STONES).map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                           ) : (
-                            <div className={`flex items-center gap-2 w-full border border-gray-200 rounded bg-gray-50 p-1 h-[28px] ${isLinked ? 'opacity-75' : ''}`}>
+                            <div className={`flex items-center gap-2 w-full border border-gray-200 rounded bg-gray-50 p-1 h-[28px] [@media(pointer:coarse)]:h-[38px] ${isLinked ? 'opacity-75' : ''}`}>
                               <input
                                 type="color" value={stone.color} disabled={isLinked}
                                 onChange={(e) => updateStone(index, { color: e.target.value })}
@@ -4634,7 +4827,7 @@ function App() {
                         </div>
                       </div>
 
-                      <div className={`grid ${stone.settingStyle === 'Bezel' ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
+                      <div className={`grid ${stone.settingStyle === 'Bezel' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-1'} gap-2`}>
                         <div className="flex flex-col gap-1.5 justify-center">
                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
                             <Crown className="w-3 h-3" /> Setting Style
@@ -4666,7 +4859,7 @@ function App() {
                                 <option value="custom">Custom (band color)</option>
                               </select>
                             </div>
-                            <div className="flex flex-col justify-center translate-y-1">
+                            <div className="flex flex-col justify-center sm:translate-y-1 col-span-2 sm:col-span-1">
                               <CompactControl
                                 label="Bezel Size"
                                 hint="Thickness of the bezel wall around the stone, in mm."
@@ -4684,7 +4877,7 @@ function App() {
                         <div className="col-span-full bg-gray-50 p-3 border border-gray-200 rounded mt-1">
                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2 block">Halo Configuration</span>
 
-                          <div className="grid grid-cols-2 gap-4 mb-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
                             <CompactControl label="Halo Stone Size" hint="Width of each small stone in the halo, in mm." value={stone.haloSize || 1.0} min={0.5} max={3.0} step={0.1} disabled={isLinked} onChange={(v) => updateStone(index, { haloSize: v })} />
 
                             <div className="flex flex-col gap-1.5">
@@ -4761,7 +4954,7 @@ function App() {
                                 aria-checked={!isCarat}
                                 disabled={isLinked}
                                 onClick={() => { if (isCarat) updateStone(index, { sizeMode: 'width', width: Number(Number(stone.width).toFixed(2)) }); }}
-                                className={`px-2.5 py-1 text-[10px] font-bold rounded uppercase transition-colors ${!isCarat ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-2.5 py-1 [@media(pointer:coarse)]:py-2 text-[10px] font-bold rounded uppercase transition-colors ${!isCarat ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                               >
                                 Manual width
                               </button>
@@ -4771,7 +4964,7 @@ function App() {
                                 disabled={isLinked || !caratAvailable}
                                 title={caratAvailable ? 'Size from the standard diamond carat chart' : `No carat chart for ${stone.shape}`}
                                 onClick={() => { if (!isCarat) toCarat(); }}
-                                className={`px-2.5 py-1 text-[10px] font-bold rounded uppercase transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isCarat ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-2.5 py-1 [@media(pointer:coarse)]:py-2 text-[10px] font-bold rounded uppercase transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isCarat ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                               >
                                 Carat
                               </button>
@@ -4780,7 +4973,7 @@ function App() {
                         );
                       })()}
 
-                      <div className="grid grid-cols-3 gap-3 pt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                         {stone.sizeMode === 'carat' && hasCaratSizes(stone.shape) ? (
                           <div className="flex flex-col gap-1.5">
                             <label htmlFor={`carat-${stone.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Carat</label>
@@ -4822,10 +5015,10 @@ function App() {
                               Center Anchor (Locked)
                             </div>
                           ) : (
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div className="flex flex-col gap-1.5">
                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">Side<Hint text="Which side of the center stone this stone sits on." /></span>
-                                <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[26px] ${isLinked ? 'opacity-75' : ''}`}>
+                                <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[26px] [@media(pointer:coarse)]:h-[38px] ${isLinked ? 'opacity-75' : ''}`}>
                                   <button
                                     disabled={isLinked}
                                     className={`flex-1 text-[10px] font-bold rounded uppercase transition-colors ${stone.side === 'left' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -4912,7 +5105,7 @@ function App() {
 
               <button
                 onClick={addStone}
-                className="flex flex-col items-center justify-center min-h-[320px] bg-white/60 hover:bg-white border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-xl p-6 text-emerald-600 hover:text-emerald-700 transition-all shadow-sm hover:shadow group cursor-pointer"
+                className="flex flex-col items-center justify-center min-h-[140px] md:min-h-[320px] bg-white/60 hover:bg-white border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-xl p-6 text-emerald-600 hover:text-emerald-700 transition-all shadow-sm hover:shadow group cursor-pointer"
               >
                 <div className="w-12 h-12 rounded-full bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center transition-colors mb-3">
                   <Plus className="w-6 h-6" />
