@@ -1,12 +1,17 @@
 # MikeyTime Ring Studio changelog
 
-## v1.5.0
+## v1.4.0
 
 ### New
+- **Real stone proportions in 3D.** Every stone is built with its cut's standard depth as a share of its width (Princess 70.4%, Asscher 68.1%, Radiant 67%, Cushion 65.9%, Emerald 65%, Hexagon 63.2%, Oval 62.1%, Round 61.3%, Pear and Marquise 61.2–61.3%, Heart 60%; Crescent Moon 60% is an estimate). The depth is split into a crown (15%), girdle (3%) and a pavilion cone (82%) narrowing to the culet, so stones look like cut gems instead of thin plates. A 6.4 mm round is 3.94 mm deep.
+- **Stone Depth** (Print settings): scale all stones from 60% to 140% of their standard depth, or set a single stone's depth in millimetres.
+- **Setting Height** replaces Gem Relief Height. It sets how high each stone's girdle sits above the band. On Auto, each stone sinks as deep into its socket as the Max Socket Depth allows and its setting raises it the rest of the way, so small stones sit low and large stones sit up on taller prongs like a real head. You can also set it for all stones, or per stone with Custom setting.
+- **Stone cards** show each stone's width × length × depth and how high its girdle sits above the band.
+- **Carat sizing.** Each stone's Size can be Manual width or Carat. Carat picks from 0.25 ct to 3.00 ct and uses standard diamond measurements (length × width × depth) for every cut except Crescent Moon, which has no standard chart. Diamond, Ruby, Sapphire, Emerald and Aquamarine are sized for their own density (ruby and sapphire are 4.2% smaller than diamond at the same weight; emerald and aquamarine 9.1% larger), and the card notes "Displaying Carat Measurements Based on Selected Stone's Density". Other gemstones and custom colors use diamond-equivalent sizes, noted "Displaying Diamond Equivalent Weight for Carat Selection". The BOM lists carat-sized stones with their weight, marking diamond-equivalent ones.
 - **Display settings gear** in the top-right corner of the preview. It opens a pop-up with the bottom ruler (scale and offset), measurement overlays (gem widths, gaps, vertical drop and label size), Hide shadows on 2D view, and a new **Show measurements under preview** switch for the ring size / bore / outer diameter / band / parts readout, which is now off by default.
 - **Print settings pop-up.** In 3D Model view, a Print settings button next to the view switch opens stone depth, setting height, max socket depth, band cutout mode, separate prongs/bezels and STL/3MF export. The old 3D Print Settings section is gone.
 - **Custom band color.** Metal now has a fourth option, Custom, with a color picker. It shows in the blueprint (with its own metal shading), the 3D model, exports and the BOM. Bezels can use it too (Custom (band color)).
-- **Custom setting on each stone.** Setting height, stone depth and max socket depth for a single stone are now set at the bottom of that stone's card: turn on Custom setting and sliders appear, starting from the stone's automatic values. This replaces the single per-stone switch in 3D Print Settings; designs saved with that switch on load with Custom setting turned on for the stones that had values.
+- **Custom setting on each stone.** Setting height, stone depth and max socket depth for a single stone are now set at the bottom of that stone's card: turn on Custom setting and sliders appear, starting from the stone's automatic values. Designs saved by v1.3 with per-stone values load with Custom setting turned on for those stones.
 - **Hover help.** Most sliders, switches and pickers have an ⓘ icon and hover text explaining what they do.
 
 ### Improved
@@ -14,17 +19,6 @@
 - Canvas zoom is a slider under the 2D preview.
 - Each stone's title names it: "Stone 1 Oval Ruby", or "Round Brilliant Custom Gemstone" for a custom color.
 - "Flat Band (No 3D/Shadow)" is renamed "Hide shadows on 2D view".
-
-## v1.4.0
-
-### New
-- **Real stone proportions in 3D.** Every stone is built with its cut's standard depth as a share of its width (Princess 70.4%, Asscher 68.1%, Radiant 67%, Cushion 65.9%, Emerald 65%, Hexagon 63.2%, Oval 62.1%, Round 61.3%, Pear and Marquise 61.2–61.3%, Heart 60%; Crescent Moon 60% is an estimate). The depth is split into a crown (15%), girdle (3%) and a pavilion cone (82%) narrowing to the culet, so stones look like cut gems instead of thin plates. A 6.4 mm round is 3.94 mm deep.
-- **Stone Depth** (3D Print Settings): scale all stones from 60% to 140% of their standard depth, or set a single stone's depth in millimetres.
-- **Setting Height** replaces Gem Relief Height. It sets how high each stone's girdle sits above the band. On Auto, each stone sinks as deep into its socket as the Max Socket Depth allows and its setting raises it the rest of the way, so small stones sit low and large stones sit up on taller prongs like a real head. You can also set it for all stones or per stone.
-- **Stone cards** show each stone's width × length × depth and how high its girdle sits above the band.
-- **Carat sizing.** Each stone's Size can be Manual width or Carat. Carat picks from 0.25 ct to 3.00 ct and uses standard diamond measurements (length × width × depth) for every cut except Crescent Moon, which has no standard chart. Diamond, Ruby, Sapphire, Emerald and Aquamarine are sized for their own density (ruby and sapphire are 4.2% smaller than diamond at the same weight; emerald and aquamarine 9.1% larger), and the card notes "Displaying Carat Measurements Based on Selected Stone's Density". Other gemstones and custom colors use diamond-equivalent sizes, noted "Displaying Diamond Equivalent Weight for Carat Selection". The BOM lists carat-sized stones with their weight, marking diamond-equivalent ones.
-
-### Improved
 - Sockets are cut to the pavilion's cross-section where it meets the band, so the stone's cone seats into the band. Stones wider than the band are raised just enough for that cross-section to fit between the band's rims.
 - Prongs, bezels and halos are sized from each stone's real girdle and crown: prongs reach up past the girdle over the crown's edge, a bezel becomes a cup that wraps a raised stone, and a halo's deck sits just under the center stone's girdle. Halo stones use real proportions too.
 - Flush settings set the table level with the band when the whole stone fits within the band's depth and width, and explain why when it doesn't.

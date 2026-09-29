@@ -110,7 +110,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.4.0';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -3168,7 +3168,7 @@ function App() {
           setBandProfile(BAND_PROFILES.some(bp => bp.id === config.bandProfile) ? config.bandProfile : 'flat');
           setBandProfileSize(Number.isFinite(config.bandProfileSize) ? config.bandProfileSize : null);
 
-          // Before v1.5, one switch turned on per-stone settings for every
+          // Before v1.4, one switch turned on per-stone settings for every
           // stone; now each stone has its own. Carry the old switch over to
           // the stones that had values set.
           setStones(config.stones.map(st => ({
