@@ -83,6 +83,8 @@ const IconBase = ({ children, className }) => (
 const Gem = (p) => <IconBase {...p}><path d="M6 3h12l4 6-10 12L2 9Z"/><path d="M11 3 8 9l4 12 4-12-3-6"/><path d="M2 9h20"/></IconBase>;
 const Layers = (p) => <IconBase {...p}><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></IconBase>;
 const Settings = (p) => <IconBase {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></IconBase>;
+const RingBand = (p) => <IconBase {...p}><ellipse cx="12" cy="9" rx="9" ry="4"/><path d="M3 9v5c0 2.2 4 4 9 4s9-1.8 9-4V9"/><path d="M7 12.4c1.4.4 3 .6 5 .6s3.6-.2 5-.6"/></IconBase>;
+const Info = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></IconBase>;
 const ArrowUpDown = (p) => <IconBase {...p}><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></IconBase>;
 const ZoomIn = (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></IconBase>;
 const Plus = (p) => <IconBase {...p}><path d="M5 12h14"/><path d="M12 5v14"/></IconBase>;
@@ -108,7 +110,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -241,6 +243,29 @@ const METAL_COLORS = {
   silver: { gradient: 'url(#band-silver)', flat: '#b5b6b8', dark: '#7a7b7d', hex: '#c0c2c4' },
   black: { gradient: 'url(#band-black)', flat: '#333333', dark: '#111111', hex: '#333333' }
 };
+const METAL_OPTIONS = ['gold', 'silver', 'black', 'custom'];
+const DEFAULT_CUSTOM_METAL = '#b76e79';
+
+// Blends a #rrggbb colour toward white (t > 0) or black (t < 0).
+const shadeHex = (hex, t) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  const n = parseInt(m ? m[1] : 'd4af37', 16);
+  const target = t > 0 ? 255 : 0;
+  const a = Math.abs(t);
+  const ch = (v) => Math.round(v + (target - v) * a).toString(16).padStart(2, '0');
+  return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
+};
+
+// Colours for a metal choice. 'custom' uses the band's custom colour, with a
+// gradient (#band-custom in the blueprint) shaded from it.
+const getMetal = (name, customHex = DEFAULT_CUSTOM_METAL) => {
+  if (name === 'custom') {
+    const hex = /^#[0-9a-f]{6}$/i.test(customHex || '') ? customHex : DEFAULT_CUSTOM_METAL;
+    return { gradient: 'url(#band-custom)', flat: hex, dark: shadeHex(hex, -0.35), hex };
+  }
+  return METAL_COLORS[name] || METAL_COLORS.gold;
+};
+const metalLabel = (name, customHex) => (name === 'custom' ? `Custom ${getMetal('custom', customHex).hex}` : `${name.charAt(0).toUpperCase()}${name.slice(1)}`);
 
 
 // Typed entries are not capped by the slider's range: a slider's min/max is
@@ -256,11 +281,19 @@ const commitTypedNumber = (value, min) => {
 };
 const blurOnEnter = (e) => { if (e.key === 'Enter') e.currentTarget.blur(); };
 
-const ControlSlider = ({ label, icon: Icon, value, min, max, step = 0.25, onChange, unit = 'mm' }) => (
-  <div className="flex flex-col gap-1.5 mb-1">
+// A small info icon whose hover text explains the control next to it.
+const Hint = ({ text }) => text ? (
+  <span title={text} aria-label={text} role="img" className="inline-flex text-gray-400 hover:text-emerald-600 cursor-help shrink-0">
+    <Info className="w-3 h-3" />
+  </span>
+) : null;
+
+const ControlSlider = ({ label, icon: Icon, value, min, max, step = 0.25, onChange, unit = 'mm', hint }) => (
+  <div className="flex flex-col gap-1.5 mb-1" title={hint}>
     <label className="text-xs font-semibold text-gray-600 flex items-center gap-1">
       {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
       {label}
+      <Hint text={hint} />
     </label>
     <div className="flex items-center gap-3">
       <input
@@ -282,10 +315,10 @@ const ControlSlider = ({ label, icon: Icon, value, min, max, step = 0.25, onChan
   </div>
 );
 
-const CompactControl = ({ label, value, min, max, step = 0.25, onChange, disabled }) => (
-  <div className={`flex flex-col gap-1.5 ${disabled ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
-    <div className="flex items-center justify-between">
-      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+const CompactControl = ({ label, value, min, max, step = 0.25, onChange, disabled, hint }) => (
+  <div className={`flex flex-col gap-1.5 ${disabled ? 'opacity-40 grayscale pointer-events-none' : ''}`} title={hint}>
+    <div className="flex items-center justify-between gap-1">
+      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1 min-w-0">{label}<Hint text={hint} /></span>
       <div className="flex items-center border border-gray-200 rounded overflow-hidden bg-gray-50">
         <input
           type="number" min={min >= 0 ? min : undefined} step={step} value={value}
@@ -293,7 +326,7 @@ const CompactControl = ({ label, value, min, max, step = 0.25, onChange, disable
           onBlur={() => onChange(commitTypedNumber(value, min))}
           onKeyDown={blurOnEnter}
           disabled={disabled}
-          className="w-12 text-xs py-0.5 px-1 bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
+          className="w-14 text-xs py-0.5 px-1 bg-transparent outline-none font-mono text-right text-emerald-700 font-bold"
         />
       </div>
     </div>
@@ -1035,8 +1068,8 @@ const build3DRingShells = ({
   settingHeight = null,
   stoneDepthPct = 100,
   pocketDepthInput,
-  uniqueStone3D,
   include3DSettings,
+  bandCustomColor = DEFAULT_CUSTOM_METAL,
   cutoutMode = 'pocket_and_gem',
   bandProfile = 'flat',
   bandProfileSize = null
@@ -1144,7 +1177,7 @@ const build3DRingShells = ({
 
     const outlinePts = getShapeOutlinePoints(shape, hw, hh, 96);
 
-    const resolvedPocketDepthRaw = (uniqueStone3D && isSetNumber(stone.pocketDepthOverride))
+    const resolvedPocketDepthRaw = (stone.customSettings && isSetNumber(stone.pocketDepthOverride))
       ? Number(stone.pocketDepthOverride)
       : globalPocketDepth;
     // Deepest the stone may sink into the band (the socket depth limit).
@@ -1153,7 +1186,7 @@ const build3DRingShells = ({
     // ---- Stone proportions (real cut depths, see CUT_DEPTH) --------------
     // Carat-sized stones take their depth from the chart (scaled by the
     // global Stone Depth %); a per-stone depth still wins over both.
-    const depth = (uniqueStone3D && isSetNumber(stone.depthOverride) && Number(stone.depthOverride) > 0)
+    const depth = (stone.customSettings && isSetNumber(stone.depthOverride) && Number(stone.depthOverride) > 0)
       ? Number(stone.depthOverride)
       : isSetNumber(stone.chartDepth)
         ? Number(stone.chartDepth) * ((Number(stoneDepthPct) || 100) / 100)
@@ -1162,7 +1195,7 @@ const build3DRingShells = ({
     const girdleT = depth * STONE_PROPORTIONS.girdle;
     const pavH = depth * STONE_PROPORTIONS.pavilion;
     const style = stone.settingStyle || '4-Prong';
-    const heightOverride = uniqueStone3D && isSetNumber(stone.settingHeightOverride)
+    const heightOverride = stone.customSettings && isSetNumber(stone.settingHeightOverride)
       ? Number(stone.settingHeightOverride)
       : (isSetNumber(settingHeight) ? Number(settingHeight) : null);
 
@@ -1310,7 +1343,7 @@ const build3DRingShells = ({
       raisedForSocket,
       stonePocketDepth,
       stoneRFloor,
-      requestedPocketDepth: (uniqueStone3D && isSetNumber(stone.pocketDepthOverride))
+      requestedPocketDepth: (stone.customSettings && isSetNumber(stone.pocketDepthOverride))
         ? Number(stone.pocketDepthOverride)
         : Number(pocketDepthInput)
     };
@@ -1658,7 +1691,7 @@ const build3DRingShells = ({
   shells.push({
     name: 'Part_01_Ring_Band_With_Sockets',
     role: 'Band (Single Watertight Shell)',
-    color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+    color: getMetal(bandColor, bandCustomColor).hex,
     isMetal: true,
     triangles: cleanBandTris
   });
@@ -2073,7 +2106,7 @@ const build3DRingShells = ({
         const prongGirdleR = outerRadius + stone.zGirdleTop + stone.crownH * 0.2;
         const prongTopR = outerRadius + stone.zGirdleTop + stone.crownH * 0.55;
         if (style === 'Bezel') {
-          const bezelColorHex = METAL_COLORS[stone.bezelColor || bandColor]?.hex || '#d4af37';
+          const bezelColorHex = getMetal(stone.bezelColor || bandColor, bandCustomColor).hex;
           const bezelTris = buildShapeSpecificBezelShell(stone);
           shells.push({
             name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Bezel`,
@@ -2115,7 +2148,7 @@ const build3DRingShells = ({
             shells.push({
               name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_VProngs`,
               role: `Stone ${idx + 1} V-Prongs`,
-              color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+              color: getMetal(bandColor, bandCustomColor).hex,
               isMetal: true,
               triangles: allVProngTris
             });
@@ -2143,7 +2176,7 @@ const build3DRingShells = ({
             shells.push({
               name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Prongs`,
               role: `Stone ${idx + 1} Prongs`,
-              color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+              color: getMetal(bandColor, bandCustomColor).hex,
               isMetal: true,
               triangles: allProngTris
             });
@@ -2179,7 +2212,7 @@ const build3DRingShells = ({
           shells.push({
             name: `Part_${String(shells.length + 1).padStart(2, '0')}_Stone_${idx + 1}_Halo_Base`,
             role: `Stone ${idx + 1} Halo Base`,
-            color: METAL_COLORS[bandColor]?.hex || '#d4af37',
+            color: getMetal(bandColor, bandCustomColor).hex,
             isMetal: true,
             triangles: seatTris
           });
@@ -2792,10 +2825,56 @@ const Ring3DPreviewCanvas = ({
   );
 };
 
+// On/off row used in the settings pop-ups and the Band section.
+const ToggleRow = ({ id, label, checked, onChange, hint, children }) => (
+  <div className="flex flex-col gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200" title={hint}>
+    <div className="flex items-center justify-between gap-3">
+      <label htmlFor={id} className="text-xs font-bold text-gray-700 cursor-pointer select-none flex items-center gap-1">
+        {label}
+        <Hint text={hint} />
+      </label>
+      <input
+        id={id}
+        type="checkbox"
+        role="switch"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
+      />
+    </div>
+    {children}
+  </div>
+);
+
+const PanelHeading = ({ children }) => (
+  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200 pb-1.5 mt-1">{children}</p>
+);
+
+// Pop-up panel anchored under the preview toolbar.
+const PopPanel = ({ id, title, icon: Icon, align = 'left', onClose, children }) => (
+  <div
+    id={id}
+    role="dialog"
+    aria-label={title}
+    className={`absolute top-full mt-2 ${align === 'right' ? 'right-0' : 'left-0'} z-30 w-[min(23rem,100%)] max-h-[min(72vh,40rem)] overflow-y-auto bg-white rounded-xl shadow-xl ring-1 ring-gray-200 p-4 flex flex-col gap-3`}
+  >
+    <div className="flex items-center justify-between gap-2">
+      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+        <Icon className="w-4 h-4 text-emerald-600" /> {title}
+      </h3>
+      <button onClick={onClose} aria-label={`Close ${title.toLowerCase()}`} className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+    {children}
+  </div>
+);
+
 function App() {
   const [canvasViewMode, setCanvasViewMode] = useState('2d');
   const [zoom, setZoom] = useState(1);
   const [bandColor, setBandColor] = useState('gold');
+  const [bandCustomColor, setBandCustomColor] = useState(DEFAULT_CUSTOM_METAL);
   const [bandWidth, setBandWidth] = useState(4);
   const [isFlatBand, setIsFlatBand] = useState(false);
   const [layoutMode, setLayoutMode] = useState('cluster');
@@ -2809,6 +2888,8 @@ function App() {
   const [showRuler, setShowRuler] = useState(true);
   const [rulerScale, setRulerScale] = useState(1);
   const [rulerOffset, setRulerOffset] = useState(0);
+  // The ring-size / bore / band / parts readout under the preview.
+  const [showStats, setShowStats] = useState(false);
 
   const [ringSize, setRingSize] = useState(7);
   const [bandThickness, setBandThickness] = useState(1.8);
@@ -2817,7 +2898,6 @@ function App() {
   const [settingHeight, setSettingHeight] = useState(null);
   const [stoneDepthPct, setStoneDepthPct] = useState(100);
   const [pocketDepthInput, setPocketDepthInput] = useState(0.75);
-  const [uniqueStone3D, setUniqueStone3D] = useState(false);
   const [include3DSettings, setInclude3DSettings] = useState(true);
   const [cutoutMode, setCutoutMode] = useState('pocket_and_gem');
   const [bandProfile, setBandProfile] = useState('flat');
@@ -2825,7 +2905,18 @@ function App() {
 
 
   const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(true);
-  const [is3DSettingsOpen, setIs3DSettingsOpen] = useState(true);
+  // Which preview pop-up is open: 'display', 'print' or null.
+  const [openPanel, setOpenPanel] = useState(null);
+  const togglePanel = (id) => setOpenPanel(prev => (prev === id ? null : id));
+  const panelBarRef = useRef(null);
+  useEffect(() => {
+    if (!openPanel) return;
+    const onPointer = (e) => { if (panelBarRef.current && !panelBarRef.current.contains(e.target)) setOpenPanel(null); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpenPanel(null); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
+  }, [openPanel]);
   const [explode3DParts, setExplode3DParts] = useState(0);
   const [externalCameraRequest, setExternalCameraRequest] = useState({
     rotX: 35,
@@ -2856,7 +2947,7 @@ function App() {
       shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
       width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
       haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
-      sizeMode: 'width', carat: 1, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
+      sizeMode: 'width', carat: 1, customSettings: false, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
     },
   ]);
 
@@ -2865,8 +2956,8 @@ function App() {
   // view settings like zoom, rulers or overlays. Changes are committed after
   // a short pause, so one slider drag or typed number is one undo step.
   const designSnapshot = {
-    stones, bandColor, bandWidth, layoutMode, ringSize, bandThickness, settingHeight, stoneDepthPct,
-    pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize
+    stones, bandColor, bandCustomColor, bandWidth, layoutMode, ringSize, bandThickness, settingHeight, stoneDepthPct,
+    pocketDepthInput, include3DSettings, cutoutMode, bandProfile, bandProfileSize
   };
   const designKey = JSON.stringify(designSnapshot);
   const historyRef = useRef({ past: [], presentKey: null, present: null, future: [] });
@@ -2902,6 +2993,7 @@ function App() {
   const applyDesign = (d) => {
     setStones(d.stones);
     setBandColor(d.bandColor);
+    setBandCustomColor(d.bandCustomColor);
     setBandWidth(d.bandWidth);
     setLayoutMode(d.layoutMode);
     setRingSize(d.ringSize);
@@ -2909,7 +3001,6 @@ function App() {
     setSettingHeight(d.settingHeight);
     setStoneDepthPct(d.stoneDepthPct);
     setPocketDepthInput(d.pocketDepthInput);
-    setUniqueStone3D(d.uniqueStone3D);
     setInclude3DSettings(d.include3DSettings);
     setCutoutMode(d.cutoutMode);
     setBandProfile(d.bandProfile);
@@ -2969,7 +3060,7 @@ function App() {
           shape: 'Round Brilliant', settingStyle: '4-Prong', bezelSize: 0.5, bezelColor: 'gold',
           width: 6, heightOffset: 0, rotation: 0, gap: 0, side: 'right', centerOffset: 5,
           haloSize: 1.0, haloPreset: 'Diamond', haloColor: PRESET_STONES['Diamond'], haloUniqueStones: false, haloOverrides: {},
-          sizeMode: 'width', carat: 1, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
+          sizeMode: 'width', carat: 1, customSettings: false, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: ''
         }];
       }
 
@@ -2998,6 +3089,7 @@ function App() {
           haloOverrides: lastStone.haloOverrides || {},
           sizeMode: lastStone.sizeMode || 'width',
           carat: lastStone.carat ?? 1,
+          customSettings: lastStone.customSettings ?? false,
           settingHeightOverride: lastStone.settingHeightOverride ?? '',
           depthOverride: lastStone.depthOverride ?? '',
           pocketDepthOverride: lastStone.pocketDepthOverride ?? ''
@@ -3031,10 +3123,10 @@ function App() {
   const handleExportConfig = () => {
     const config = {
       appVersion: APP_VERSION,
-      zoom, bandColor, bandWidth, isFlatBand, layoutMode,
+      zoom, bandColor, bandCustomColor, bandWidth, isFlatBand, layoutMode,
       showSeparation, showWidth, showVertical, verticalFrom,
-      measTextSize, showRuler, rulerScale, rulerOffset,
-      ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize,
+      measTextSize, showRuler, rulerScale, rulerOffset, showStats,
+      ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, include3DSettings, cutoutMode, bandProfile, bandProfileSize,
       stones
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
@@ -3050,7 +3142,8 @@ function App() {
         const config = JSON.parse(event.target.result);
         if (config && Array.isArray(config.stones)) {
           setZoom(config.zoom || 1);
-          setBandColor(config.bandColor || 'gold');
+          setBandColor(METAL_OPTIONS.includes(config.bandColor) ? config.bandColor : 'gold');
+          setBandCustomColor(/^#[0-9a-f]{6}$/i.test(config.bandCustomColor || '') ? config.bandCustomColor : DEFAULT_CUSTOM_METAL);
           setBandWidth(config.bandWidth || 4);
           setIsFlatBand(config.isFlatBand || false);
           setLayoutMode(config.layoutMode || 'cluster');
@@ -3063,19 +3156,26 @@ function App() {
           setShowRuler(config.showRuler ?? true);
           setRulerScale(config.rulerScale ?? 1);
           setRulerOffset(config.rulerOffset ?? 0);
+          setShowStats(config.showStats ?? false);
 
           setRingSize(config.ringSize ?? 7);
           setBandThickness(config.bandThickness ?? 1.8);
           setSettingHeight(isSetNumber(config.settingHeight) ? Number(config.settingHeight) : null);
           setStoneDepthPct(isSetNumber(config.stoneDepthPct) ? Number(config.stoneDepthPct) : 100);
           setPocketDepthInput(config.pocketDepthInput ?? 0.75);
-          setUniqueStone3D(config.uniqueStone3D ?? false);
           setInclude3DSettings(config.include3DSettings ?? true);
           setCutoutMode(config.cutoutMode ?? 'pocket_and_gem');
           setBandProfile(BAND_PROFILES.some(bp => bp.id === config.bandProfile) ? config.bandProfile : 'flat');
           setBandProfileSize(Number.isFinite(config.bandProfileSize) ? config.bandProfileSize : null);
 
-          setStones(config.stones);
+          // Before v1.5, one switch turned on per-stone settings for every
+          // stone; now each stone has its own. Carry the old switch over to
+          // the stones that had values set.
+          setStones(config.stones.map(st => ({
+            ...st,
+            customSettings: st.customSettings ?? (!!config.uniqueStone3D &&
+              [st.settingHeightOverride, st.depthOverride, st.pocketDepthOverride].some(isSetNumber))
+          })));
           // "1.31" was this release's name for a short while before it became 1.3.1.
           const savedVersion = config.appVersion === '1.31' ? '1.3.1' : config.appVersion;
           if (savedVersion && compareVersions(savedVersion, APP_VERSION) > 0) {
@@ -3121,6 +3221,7 @@ function App() {
             haloColor: target.haloColor,
             haloUniqueStones: target.haloUniqueStones,
             haloOverrides: target.haloOverrides,
+            customSettings: target.customSettings,
             settingHeightOverride: target.settingHeightOverride,
             depthOverride: target.depthOverride,
             pocketDepthOverride: target.pocketDepthOverride
@@ -3188,13 +3289,13 @@ function App() {
       settingHeight,
       stoneDepthPct,
       pocketDepthInput,
-      uniqueStone3D,
       include3DSettings,
+      bandCustomColor,
       cutoutMode,
       bandProfile,
       bandProfileSize
     });
-  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, uniqueStone3D, include3DSettings, cutoutMode, bandProfile, bandProfileSize]);
+  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, include3DSettings, bandCustomColor, cutoutMode, bandProfile, bandProfileSize]);
 
   const handleExportSTL = useCallback(() => {
     const blob = generateBinarySTLBlob(ring3DData.shells, bandWidth);
@@ -3265,7 +3366,7 @@ function App() {
     rows.push([
       'Band', 1, 'Ring band', `${profileLabel} profile${profileSize}`,
       `US ${ringSize}, bore Ø ${mm(ring3DData.innerDiameter)}, ${mm(bandWidth)} wide × ${mm(thick)} thick`,
-      `${bandColor.charAt(0).toUpperCase()}${bandColor.slice(1)} metal`, '', '', '',
+      `${metalLabel(bandColor, bandCustomColor)} metal`, '', '', '',
       cutoutMode === 'pocket_and_gem' ? 'Carved sockets + stones' : cutoutMode === 'sockets_only' ? 'Empty sockets only' : 'Solid band (no sockets)'
     ]);
 
@@ -3276,7 +3377,7 @@ function App() {
       const info = ring3DData.stoneInfo?.[stone.id] || {};
       const depthMM = info.depth ?? (isSetNumber(stone.chartDepth) ? stone.chartDepth * stoneDepthPct / 100 : getStoneDepth(stone.shape, w, stoneDepthPct));
       const setting = stone.settingStyle === 'Bezel'
-        ? `Bezel ${mm(stone.bezelSize || 0.5)} mm, ${stone.bezelColor || bandColor}`
+        ? `Bezel ${mm(stone.bezelSize || 0.5)} mm, ${metalLabel(stone.bezelColor || bandColor, bandCustomColor).toLowerCase()}`
         : stone.settingStyle === 'Halo' ? `Halo (${mm(stone.haloSize || 1)} mm stones)` : stone.settingStyle;
       rows.push([
         `Stone ${i + 1}`, 1, `Stone (${role})`,
@@ -3358,9 +3459,9 @@ function App() {
   const renderSetting = (stone, hw, hh, pSize, basePath) => {
     const { settingStyle: style, shape, bezelSize = 0.5, bezelColor = 'gold' } = stone;
 
-    const mColorBand = METAL_COLORS[bandColor];
+    const mColorBand = getMetal(bandColor, bandCustomColor);
     const bandFill = isFlatBand ? mColorBand.flat : mColorBand.gradient;
-    const mColorBezel = METAL_COLORS[bezelColor];
+    const mColorBezel = getMetal(bezelColor, bandCustomColor);
     const bezelFill = isFlatBand ? mColorBezel.flat : mColorBezel.gradient;
     const bezelOutline = isFlatBand ? mColorBezel.dark : 'none';
 
@@ -3554,63 +3655,247 @@ function App() {
 
         <section aria-label="Ring preview" className="bg-white border-b border-gray-200 shadow-[0_1px_0_rgba(23,25,30,0.04),0_8px_24px_-18px_rgba(23,25,30,0.35)] px-3 sm:px-6 pt-3 pb-2.5">
           <div className="max-w-5xl mx-auto flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div role="tablist" aria-label="Preview mode" className="inline-flex p-1 rounded-lg bg-gray-100 ring-1 ring-gray-200">
-                {[
-                  { id: '2d', label: '2D Blueprint', Icon: Compass },
-                  { id: '3d', label: '3D Model', Icon: Box }
-                ].map(({ id, label, Icon }) => (
-                  <button
-                    key={id}
-                    role="tab"
-                    aria-selected={canvasViewMode === id}
-                    onClick={() => setCanvasViewMode(id)}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-semibold transition-colors ${
-                      canvasViewMode === id ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-white'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" /> {label}
-                  </button>
-                ))}
-              </div>
-
-              {canvasViewMode === '3d' ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500 mr-0.5">Camera</span>
+            <div ref={panelBarRef} className="relative flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div role="tablist" aria-label="Preview mode" className="inline-flex p-1 rounded-lg bg-gray-100 ring-1 ring-gray-200">
                   {[
-                    { name: 'Crown', label: 'Top', args: [0, 0, 1.35] },
-                    { name: '3/4', label: '3/4', args: [35, -22, 1.2] },
-                    { name: 'Profile', label: 'Profile', args: [82, 0, 1.15] }
-                  ].map(({ name, label, args }) => (
+                    { id: '2d', label: '2D Blueprint', Icon: Compass },
+                    { id: '3d', label: '3D Model', Icon: Box }
+                  ].map(({ id, label, Icon }) => (
                     <button
-                      key={name}
-                      onClick={() => apply3DCameraPreset(name, ...args)}
-                      className="px-2.5 py-1 rounded-md bg-white ring-1 ring-gray-200 hover:ring-gray-300 hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors"
+                      key={id}
+                      role="tab"
+                      aria-selected={canvasViewMode === id}
+                      onClick={() => { setCanvasViewMode(id); if (id === '2d' && openPanel === 'print') setOpenPanel(null); }}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-semibold transition-colors ${
+                        canvasViewMode === id ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                      }`}
                     >
-                      {label}
+                      <Icon className="w-4 h-4" /> {label}
                     </button>
                   ))}
-                  <span className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+                </div>
+                {canvasViewMode === '3d' && (
                   <button
-                    aria-pressed={explode3DParts > 0}
-                    onClick={() => setExplode3DParts(prev => (prev === 0 ? 1 : 0))}
-                    title="Pull stones and settings away from the band to inspect the separate print parts"
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ring-1 transition-colors ${
-                      explode3DParts > 0 ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-700 hover:bg-gray-50'
+                    onClick={() => togglePanel('print')}
+                    aria-expanded={openPanel === 'print'}
+                    aria-controls="print-settings-panel"
+                    title="3D print settings: stone depth, setting height, sockets, cutout mode and export"
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold ring-1 transition-colors ${
+                      openPanel === 'print' ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <Layers className="w-3.5 h-3.5" /> {explode3DParts > 0 ? 'Exploded' : 'Explode parts'}
+                    <Printer className="w-3.5 h-3.5" /> Print settings
                   </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500 mr-0.5">Zoom</span>
-                  <div className="flex items-center rounded-md bg-white ring-1 ring-gray-200 overflow-hidden divide-x divide-gray-200">
-                    <button onClick={() => setZoom(z => Math.max(1, Number((Number(z) - 0.5).toFixed(2))))} aria-label="Zoom out" className="px-2.5 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-50">−</button>
-                    <span className="px-2 py-1 text-xs font-mono tabular text-gray-700 min-w-[3.25rem] text-center">{Number(zoom).toFixed(2)}×</span>
-                    <button onClick={() => setZoom(z => Number((Number(z) + 0.5).toFixed(2)))} aria-label="Zoom in" className="px-2.5 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-50">+</button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+                {canvasViewMode === '3d' && (
+                  <>
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500 mr-0.5">Camera</span>
+                    {[
+                      { name: 'Crown', label: 'Top', args: [0, 0, 1.35] },
+                      { name: '3/4', label: '3/4', args: [35, -22, 1.2] },
+                      { name: 'Profile', label: 'Profile', args: [82, 0, 1.15] }
+                    ].map(({ name, label, args }) => (
+                      <button
+                        key={name}
+                        onClick={() => apply3DCameraPreset(name, ...args)}
+                        className="px-2.5 py-1 rounded-md bg-white ring-1 ring-gray-200 hover:ring-gray-300 hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <span className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+                    <button
+                      aria-pressed={explode3DParts > 0}
+                      onClick={() => setExplode3DParts(prev => (prev === 0 ? 1 : 0))}
+                      title="Pull stones and settings away from the band to inspect the separate print parts"
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ring-1 transition-colors ${
+                        explode3DParts > 0 ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" /> {explode3DParts > 0 ? 'Exploded' : 'Explode parts'}
+                    </button>
+                    <span className="w-px h-5 bg-gray-300 mx-1" aria-hidden="true" />
+                  </>
+                )}
+                <button
+                  onClick={() => togglePanel('display')}
+                  aria-expanded={openPanel === 'display'}
+                  aria-controls="display-settings-panel"
+                  aria-label="Display settings"
+                  title="Display settings: rulers, measurement overlays, shadows and the measurements readout"
+                  className={`p-1.5 rounded-md ring-1 transition-colors ${
+                    openPanel === 'display' ? 'bg-emerald-600 ring-emerald-600 text-white' : 'bg-white ring-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              </div>
+
+              {openPanel === 'display' && (
+                <PopPanel id="display-settings-panel" title="Display Settings" icon={Settings} align="right" onClose={() => setOpenPanel(null)}>
+                  <ToggleRow
+                    id="show-stats"
+                    label="Show measurements under preview"
+                    checked={showStats}
+                    onChange={setShowStats}
+                    hint="Show the ring size, bore and outer diameter, band size and part count under the preview."
+                  />
+                  <ToggleRow
+                    id="hide-shadows-display"
+                    label="Hide shadows on 2D view"
+                    checked={isFlatBand}
+                    onChange={setIsFlatBand}
+                    hint="Draw the blueprint with flat colors and outlines instead of metal shading and drop shadows. Doesn't change the 3D model or exports."
+                  />
+
+                  <PanelHeading>Ruler (2D)</PanelHeading>
+                  <ToggleRow
+                    id="show-bottom-ruler"
+                    label="Show bottom ruler"
+                    checked={showRuler}
+                    onChange={setShowRuler}
+                    hint="Show a millimetre ruler along the bottom of the blueprint."
+                  >
+                    {showRuler && (
+                      <div className="flex flex-col gap-1 pt-1">
+                        <ControlSlider label="Ruler Scale" value={rulerScale} min={0.4} max={2.5} step={0.1} onChange={setRulerScale} unit="x" hint="Size of the ruler's ticks and numbers." />
+                        <ControlSlider label="Ruler Offset" value={rulerOffset} min={-15} max={15} step={0.5} onChange={setRulerOffset} unit="mm" hint="Move the ruler up (negative) or down (positive)." />
+                      </div>
+                    )}
+                  </ToggleRow>
+
+                  <PanelHeading>Measurement Overlays (2D)</PanelHeading>
+                  <ToggleRow id="show-widths" label="Gem widths" checked={showWidth} onChange={setShowWidth} hint="Label each stone's width on the blueprint." />
+                  <ToggleRow id="show-gaps" label="Gem separation (gaps)" checked={showSeparation} onChange={setShowSeparation} hint="Label the gap between neighbouring stones." />
+                  <ToggleRow id="show-vertical" label="Vertical drop distance" checked={showVertical} onChange={setShowVertical} hint="Label how far each stone sits from the top or bottom edge of the band.">
+                    {showVertical && (
+                      <div className="flex gap-1.5">
+                        <button onClick={() => setVerticalFrom('top')} className={`flex-1 text-[10px] uppercase font-bold px-2 py-1 rounded transition-colors ${verticalFrom === 'top' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>From Top</button>
+                        <button onClick={() => setVerticalFrom('bottom')} className={`flex-1 text-[10px] uppercase font-bold px-2 py-1 rounded transition-colors ${verticalFrom === 'bottom' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>From Bottom</button>
+                      </div>
+                    )}
+                  </ToggleRow>
+                  {(showWidth || showSeparation || showVertical) && (
+                    <ControlSlider label="Label Text Size" icon={Type} value={measTextSize} min={0.2} max={1.2} step={0.05} onChange={setMeasTextSize} unit="mm" hint="Height of the measurement labels on the blueprint." />
+                  )}
+                </PopPanel>
+              )}
+
+              {openPanel === 'print' && canvasViewMode === '3d' && (
+                <PopPanel id="print-settings-panel" title="3D Print Settings" icon={Printer} align="left" onClose={() => setOpenPanel(null)}>
+                  <PanelHeading>Stones &amp; Sockets</PanelHeading>
+                  <ControlSlider
+                    label="Stone Depth (% of standard cut)" value={stoneDepthPct} min={60} max={140} step={1} onChange={setStoneDepthPct} unit="%"
+                    hint="Scales every stone's depth. 100% uses each cut's standard depth-to-width proportion."
+                  />
+                  <p className="-mt-1 text-[11px] text-gray-500">
+                    At 100%, each cut uses its standard depth: a 6 mm round is {getStoneDepth('Round Brilliant', 6, stoneDepthPct).toFixed(2)} mm deep{Number(stoneDepthPct) !== 100 ? ` at ${Number(stoneDepthPct)}%` : ''}.
+                  </p>
+                  {(() => {
+                    const isAuto = !isSetNumber(settingHeight);
+                    const firstInfo = ring3DData.stoneInfo?.[effectiveStones[0]?.id];
+                    const shown = isAuto ? Number(Math.max(0, firstInfo?.girdleHeight ?? 0).toFixed(2)) : settingHeight;
+                    return (
+                      <div className="flex flex-col gap-1 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                        <ControlSlider
+                          label={`Setting Height${isAuto ? ' (auto)' : ''}`}
+                          value={shown}
+                          min={0}
+                          max={6}
+                          step={0.05}
+                          onChange={setSettingHeight}
+                          unit="mm"
+                          hint="How high each stone's girdle (its widest edge) sits above the band. Auto sinks each stone as deep as its socket allows and raises it the rest of the way on its setting."
+                        />
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                          <span>
+                            {isAuto
+                              ? 'Girdle height above the band. Auto sinks each stone as deep as its socket allows.'
+                              : 'Girdle height above the band for every stone.'}
+                          </span>
+                          {!isAuto && (
+                            <button onClick={() => setSettingHeight(null)} className="font-semibold text-emerald-700 hover:text-emerald-800 underline">
+                              Auto
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <ControlSlider
+                    label="Max Socket Depth" value={pocketDepthInput} min={0.2} max={1.5} step={0.05} onChange={setPocketDepthInput} unit="mm"
+                    hint="The deepest a stone may sink into the band. Deeper sockets hold stones lower but leave less metal underneath."
+                  />
+                  {Number(pocketDepthInput) > Math.max(1.2, Number(bandThickness) || 1.8) * 0.72 + 0.005 && (
+                    <p className="-mt-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                      Sockets are capped at {(Math.max(1.2, Number(bandThickness) || 1.8) * 0.72).toFixed(2)} mm (72% of the band thickness) so the band stays intact.
+                    </p>
+                  )}
+                  <p className="text-[11px] text-gray-500">
+                    To give one stone its own height, depth or socket, turn on <strong>Custom setting</strong> at the bottom of its card.
+                  </p>
+
+                  <PanelHeading>Slicer &amp; Multi-Part Export</PanelHeading>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                      Band Cutout Mode
+                      <Hint text="Pocket + Gem: sockets carved in the band, with stones to print. Empty Sockets: sockets only, no stones. Solid Band: no sockets." />
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-md border border-gray-200">
+                      {[
+                        { id: 'pocket_and_gem', label: 'Pocket + Gem', hint: 'Carve sockets into the band and export the stones as separate parts.' },
+                        { id: 'sockets_only', label: 'Empty Sockets', hint: 'Carve sockets into the band but leave the stones out, e.g. to set real stones.' },
+                        { id: 'solid_band', label: 'Solid Band', hint: 'No sockets: the band stays solid and stones sit on top of it.' }
+                      ].map(mode => (
+                        <button
+                          key={mode.id}
+                          onClick={() => setCutoutMode(mode.id)}
+                          title={mode.hint}
+                          className={`py-1.5 px-1.5 rounded text-[10px] font-bold transition-all ${
+                            cutoutMode === mode.id
+                              ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                              : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                  <ToggleRow
+                    id="include-3d-settings"
+                    label="Include separate prongs/bezels"
+                    checked={include3DSettings}
+                    onChange={setInclude3DSettings}
+                    hint="Export prongs, bezels and halos as their own parts. Turn off to export only the band and stones."
+                  >
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                      In OrcaSlicer, Bambu Studio or Anycubic Slicer, <em>Split to Parts</em> gives 1 ring band with carved sockets, {stones.length} {stones.length === 1 ? 'stone' : 'stones'}{include3DSettings ? ' and shape-fitted prongs, bezels and halos' : ''}.
+                    </p>
+                  </ToggleRow>
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    <button
+                      onClick={handleExport3MF}
+                      title="Export a multi-object 3MF with named parts (OrcaSlicer, Bambu Studio, Anycubic)"
+                      className="py-2 px-3 rounded-lg bg-white ring-1 ring-gray-300 hover:bg-gray-50 text-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <PackageCheck className="w-4 h-4" />
+                      Export 3MF
+                    </button>
+                    <button
+                      onClick={handleExportSTL}
+                      title="Export a welded multi-shell STL (band with carved sockets plus each stone)"
+                      className="py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Export STL
+                    </button>
+                  </div>
+                </PopPanel>
               )}
             </div>
 
@@ -3663,6 +3948,19 @@ function App() {
                   <stop offset="100%" stopColor="#222222" />
                 </linearGradient>
 
+                {(() => {
+                  const hex = getMetal('custom', bandCustomColor).hex;
+                  return (
+                    <linearGradient id="band-custom" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={shadeHex(hex, -0.12)} />
+                      <stop offset="20%" stopColor={shadeHex(hex, 0.45)} />
+                      <stop offset="50%" stopColor={hex} />
+                      <stop offset="80%" stopColor={shadeHex(hex, -0.45)} />
+                      <stop offset="100%" stopColor={shadeHex(hex, -0.12)} />
+                    </linearGradient>
+                  );
+                })()}
+
                 <linearGradient id="band-dome-shade" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="rgba(0,0,0,0.30)" />
                   <stop offset="12%" stopColor="rgba(255,255,255,0.05)" />
@@ -3699,7 +3997,7 @@ function App() {
                 y={-(Number(bandWidth) / 2)}
                 width={svgWidthMM}
                 height={Number(bandWidth) || 0}
-                fill={isFlatBand ? METAL_COLORS[bandColor].flat : `url(#band-${bandColor})`}
+                fill={isFlatBand ? getMetal(bandColor, bandCustomColor).flat : getMetal(bandColor, bandCustomColor).gradient}
                 filter={isFlatBand ? undefined : "url(#drop-shadow)"}
               />
 
@@ -3952,16 +4250,35 @@ function App() {
             </svg>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-gray-500">
-              <span className="font-mono tabular">US {ringSize}</span>
-              <span className="font-mono tabular">Bore Ø {ring3DData.innerDiameter.toFixed(2)} mm</span>
-              <span className="font-mono tabular">Outer Ø {ring3DData.outerDiameter.toFixed(2)} mm</span>
-              <span className="font-mono tabular">Band {Number(bandWidth).toFixed(2)} × {Number(bandThickness).toFixed(1)} mm{bandProfile !== 'flat' ? ` · ${BAND_PROFILES.find(bp => bp.id === bandProfile)?.label.toLowerCase()}` : ''}</span>
-              <span className="font-mono tabular">{stones.length} {stones.length === 1 ? 'stone' : 'stones'} · {ring3DData.shells.length} print parts</span>
-              <span className="sm:ml-auto text-gray-400">
-                {canvasViewMode === '3d' ? 'Drag to rotate · scroll to zoom' : 'Grid: 1 mm minor, 10 mm major'}
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1">
+              {canvasViewMode === '2d' ? (
+                <div className="flex items-center gap-2" title="Zoom the blueprint in or out">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500">Zoom</span>
+                  <button onClick={() => setZoom(z => Math.max(1, Number((Number(z) - 0.5).toFixed(2))))} aria-label="Zoom out" className="w-6 h-6 rounded-md bg-white ring-1 ring-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">−</button>
+                  <input
+                    type="range" min={1} max={Math.max(10, Number(zoom) || 1)} step={0.25} value={zoom}
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                    aria-label="Canvas zoom"
+                    className="w-28 sm:w-40 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                  />
+                  <button onClick={() => setZoom(z => Number((Number(z) + 0.5).toFixed(2)))} aria-label="Zoom in" className="w-6 h-6 rounded-md bg-white ring-1 ring-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">+</button>
+                  <span className="text-xs font-mono tabular text-gray-700 min-w-[3rem]">{Number(zoom).toFixed(2)}×</span>
+                </div>
+              ) : (
+                <span className="text-[11px] text-gray-500">Drag to rotate · scroll to zoom</span>
+              )}
+              {canvasViewMode === '2d' && <span className="text-[11px] text-gray-400">Grid: 1 mm minor, 10 mm major</span>}
             </div>
+
+            {showStats && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-gray-500 border-t border-gray-100 pt-2">
+                <span className="font-mono tabular">US {ringSize}</span>
+                <span className="font-mono tabular">Bore Ø {ring3DData.innerDiameter.toFixed(2)} mm</span>
+                <span className="font-mono tabular">Outer Ø {ring3DData.outerDiameter.toFixed(2)} mm</span>
+                <span className="font-mono tabular">Band {Number(bandWidth).toFixed(2)} × {Number(bandThickness).toFixed(1)} mm{bandProfile !== 'flat' ? ` · ${BAND_PROFILES.find(bp => bp.id === bandProfile)?.label.toLowerCase()}` : ''}</span>
+                <span className="font-mono tabular">{stones.length} {stones.length === 1 ? 'stone' : 'stones'} · {ring3DData.shells.length} print parts</span>
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -3976,23 +4293,30 @@ function App() {
             >
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-emerald-500" />
+                  <RingBand className="w-5 h-5 text-emerald-600" />
                   <h2 className="text-[15px] font-semibold text-gray-900">
-                    Band &amp; Blueprint
+                    Band Settings
                   </h2>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md capitalize flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full ring-1 ring-black/10" style={{ backgroundColor: METAL_COLORS[bandColor]?.hex }} />
+                    <span className="w-2 h-2 rounded-full ring-1 ring-black/10" style={{ backgroundColor: getMetal(bandColor, bandCustomColor).hex }} />
                     {bandColor}
                   </span>
-                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">{bandWidth} mm band</span>
+                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">US {ringSize}</span>
+                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">{Number(bandWidth).toFixed(2)} × {Number(bandThickness).toFixed(1)} mm</span>
+                  {bandProfile !== 'flat' && (
+                    <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
+                      {BAND_PROFILES.find(bp => bp.id === bandProfile)?.label} edges
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div className="flex items-center justify-between md:justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setIsGlobalSettingsOpen(prev => !prev)}
+                  aria-expanded={isGlobalSettingsOpen}
                   className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 border border-gray-200 hover:border-emerald-200 px-2.5 py-1.5 rounded-lg transition-colors"
                 >
                   <span>{isGlobalSettingsOpen ? 'Hide' : 'Show'}</span>
@@ -4005,182 +4329,90 @@ function App() {
               <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6 items-start bg-white">
                 <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-3.5">
                   <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 block mb-2">Metal</label>
-                    <div className="flex gap-2">
-                      {['gold', 'silver', 'black'].map((metal) => (
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1">
+                      Metal
+                      <Hint text="The band's color, used in the blueprint, the 3D model and the exported parts. Bezels can use their own metal." />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {METAL_OPTIONS.map((metal) => (
                         <button
                           key={metal}
                           onClick={() => setBandColor(metal)}
-                          className={`flex-1 py-1.5 px-3 rounded-md font-medium text-sm capitalize transition-all border-2 ${
+                          aria-pressed={bandColor === metal}
+                          className={`py-1.5 px-3 rounded-md font-medium text-sm capitalize transition-all border-2 ${
                             bandColor === metal
                               ? 'border-emerald-600 bg-emerald-50 text-emerald-700 shadow-sm'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                           }`}
                         >
                           <span className="inline-flex items-center justify-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: METAL_COLORS[metal]?.hex }} />
+                            <span className="w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: getMetal(metal, bandCustomColor).hex }} />
                             {metal}
                           </span>
                         </button>
                       ))}
                     </div>
+                    {bandColor === 'custom' && (
+                      <div className="mt-2 flex items-center gap-2 w-full border border-gray-200 rounded-md bg-gray-50 p-1.5">
+                        <input
+                          type="color"
+                          value={getMetal('custom', bandCustomColor).hex}
+                          onChange={(e) => setBandCustomColor(e.target.value)}
+                          aria-label="Custom band color"
+                          className="w-6 h-6 p-0 border border-gray-300 rounded cursor-pointer shrink-0 bg-transparent"
+                        />
+                        <span className="text-xs font-mono font-semibold text-gray-600 uppercase">{getMetal('custom', bandCustomColor).hex}</span>
+                        <span className="ml-auto text-[11px] text-gray-400">Custom band color</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                    <label className="text-xs font-bold text-gray-700 cursor-pointer select-none" htmlFor="flat-band">
-                      Flat Band (No 3D/Shadow)
-                    </label>
-                    <input
-                      id="flat-band"
-                      type="checkbox"
-                      checked={isFlatBand}
-                      onChange={(e) => setIsFlatBand(e.target.checked)}
-                      className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                    <label className="text-xs font-bold text-gray-700 cursor-pointer select-none" htmlFor="show-bottom-ruler">
-                      Show Bottom Ruler
-                    </label>
-                    <input
-                      id="show-bottom-ruler"
-                      type="checkbox"
-                      checked={showRuler}
-                      onChange={(e) => setShowRuler(e.target.checked)}
-                      className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
-                    />
-                  </div>
+                  <ToggleRow
+                    id="hide-shadows-band"
+                    label="Hide shadows on 2D view"
+                    checked={isFlatBand}
+                    onChange={setIsFlatBand}
+                    hint="Draw the blueprint with flat colors and outlines instead of metal shading and drop shadows. Doesn't change the 3D model or exports."
+                  />
                 </div>
 
                 <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-3">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200 pb-1.5">
-                    Band &amp; Viewport Dimensions
-                  </label>
-                  <ControlSlider label="Band Width" icon={ArrowUpDown} value={bandWidth} min={1} max={10} step={0.25} onChange={setBandWidth} />
-                  <ControlSlider label="Canvas Zoom" icon={ZoomIn} value={zoom} min={1} max={10} step={0.25} onChange={setZoom} unit="x" />
-                  {showRuler && (
-                    <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 flex flex-col gap-2">
-                      <ControlSlider label="Ruler Scale" value={rulerScale} min={0.4} max={2.5} step={0.1} onChange={setRulerScale} unit="x" />
-                      <ControlSlider label="Ruler Offset" value={rulerOffset} min={-15} max={15} step={0.5} onChange={setRulerOffset} unit="mm" />
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between border-b border-gray-200 pb-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Size</label>
+                    <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title="Inside diameter of the ring">
+                      Bore Ø {ring3DData.innerDiameter.toFixed(2)} mm
+                    </span>
+                  </div>
+                  <ControlSlider label="US Ring Size" value={ringSize} min={3} max={15} step={0.25} onChange={setRingSize} unit="US" hint="US ring size. Sets the inside (bore) diameter of the ring." />
+                  <ControlSlider label="Band Width" icon={ArrowUpDown} value={bandWidth} min={1} max={10} step={0.25} onChange={setBandWidth} hint="How wide the band is across the finger, in millimetres." />
+                  <ControlSlider label="Band Thickness" value={bandThickness} min={1.2} max={4.0} step={0.1} onChange={setBandThickness} unit="mm" hint="How thick the metal is from the inside of the ring to the outside. Thicker bands allow deeper sockets." />
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200 pb-1.5">
-                    Measurement Overlays
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200 pb-1.5 flex items-center gap-1">
+                    Band Profile
+                    <Hint text="The shape of the band's edges: flat, beveled (45° chamfers) or rounded (domed)." />
                   </label>
-                  <ControlSlider label="Text Size" icon={Type} value={measTextSize} min={0.2} max={1.2} step={0.05} onChange={setMeasTextSize} unit="mm" />
-                  <div className="flex flex-col gap-2">
-                    <div className="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-2">
-                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
-                        <input type="checkbox" checked={showWidth} onChange={e => setShowWidth(e.target.checked)} className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer" />
-                        Gem Widths
-                      </label>
-                    </div>
-
-                    <div className="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-2">
-                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
-                        <input type="checkbox" checked={showSeparation} onChange={e => setShowSeparation(e.target.checked)} className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer" />
-                        Gem Separation (Gaps)
-                      </label>
-                    </div>
-
-                    <div className="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-2">
-                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
-                        <input type="checkbox" checked={showVertical} onChange={e => setShowVertical(e.target.checked)} className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer" />
-                        Vertical Drop Distance
-                      </label>
-                      {showVertical && (
-                        <div className="flex gap-1.5 ml-5 mt-1">
-                          <button onClick={() => setVerticalFrom('top')} className={`flex-1 text-[10px] uppercase font-bold px-2 py-1 rounded transition-colors ${verticalFrom === 'top' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>From Top</button>
-                          <button onClick={() => setVerticalFrom('bottom')} className={`flex-1 text-[10px] uppercase font-bold px-2 py-1 rounded transition-colors ${verticalFrom === 'bottom' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}>From Bottom</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all">
-            <div
-              onClick={() => setIs3DSettingsOpen(prev => !prev)}
-              className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3.5 bg-white hover:bg-gray-50/80 cursor-pointer select-none border-b border-gray-100 gap-3 transition-colors"
-            >
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Box className="w-5 h-5 text-emerald-600" />
-                  <h2 className="text-[15px] font-semibold text-gray-900">
-                    3D Print Settings
-                  </h2>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">US {ringSize}</span>
-                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">{Number(bandThickness).toFixed(1)} mm thick</span>
-                  {bandProfile !== 'flat' && (
-                    <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
-                      {BAND_PROFILES.find(bp => bp.id === bandProfile)?.label} edges
-                    </span>
-                  )}
-                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
-                    {uniqueStone3D ? 'Per-stone heights' : (isSetNumber(settingHeight) ? `Girdle +${Number(settingHeight).toFixed(2)} mm` : 'Auto setting height')}
-                    {Number(stoneDepthPct) !== 100 ? ` · ${Number(stoneDepthPct)}% depth` : ''}
-                  </span>
-                  <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">
-                    {cutoutMode === 'pocket_and_gem' ? 'Pocket + gem' : cutoutMode === 'sockets_only' ? 'Empty sockets' : 'Solid band'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between md:justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => setIs3DSettingsOpen(prev => !prev)}
-                  className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 border border-gray-200 hover:border-emerald-200 px-2.5 py-1.5 rounded-lg transition-colors"
-                >
-                  <span>{is3DSettingsOpen ? 'Hide' : 'Show'}</span>
-                  {is3DSettingsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {is3DSettingsOpen && (
-              <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 items-start bg-white">
-                <div className="md:pr-6 md:border-r border-gray-100 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between border-b border-gray-200 pb-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                      Ring Sizing &amp; Socket Geometry
-                    </label>
-                    <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      Bore Ø {ring3DData.innerDiameter.toFixed(2)}mm
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 mb-1">
-                    <span className="text-xs font-semibold text-gray-600">Band Profile</span>
-                    <div role="radiogroup" aria-label="Band profile" className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-md border border-gray-200">
-                      {BAND_PROFILES.map(bp => (
-                        <button
-                          key={bp.id}
-                          role="radio"
-                          aria-checked={bandProfile === bp.id}
-                          onClick={() => { if (bp.id !== bandProfile) { setBandProfile(bp.id); setBandProfileSize(null); } }}
-                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-xs font-semibold transition-all ${
-                            bandProfile === bp.id ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                        >
-                          <svg viewBox="0 0 24 12" className="w-6 h-3" aria-hidden="true">
-                            <path
-                              d={bp.id === 'flat' ? 'M2 11 V3 H22 V11 Z' : bp.id === 'bevel' ? 'M2 11 V6 L5 3 H19 L22 6 V11 Z' : 'M2 11 V8 Q2 2 12 2 Q22 2 22 8 V11 Z'}
-                              fill="currentColor" opacity="0.85"
-                            />
-                          </svg>
-                          {bp.label}
-                        </button>
-                      ))}
-                    </div>
+                  <div role="radiogroup" aria-label="Band profile" className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-md border border-gray-200">
+                    {BAND_PROFILES.map(bp => (
+                      <button
+                        key={bp.id}
+                        role="radio"
+                        aria-checked={bandProfile === bp.id}
+                        onClick={() => { if (bp.id !== bandProfile) { setBandProfile(bp.id); setBandProfileSize(null); } }}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-xs font-semibold transition-all ${
+                          bandProfile === bp.id ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-gray-500 hover:text-gray-800'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 12" className="w-6 h-3" aria-hidden="true">
+                          <path
+                            d={bp.id === 'flat' ? 'M2 11 V3 H22 V11 Z' : bp.id === 'bevel' ? 'M2 11 V6 L5 3 H19 L22 6 V11 Z' : 'M2 11 V8 Q2 2 12 2 Q22 2 22 8 V11 Z'}
+                            fill="currentColor" opacity="0.85"
+                          />
+                        </svg>
+                        {bp.label}
+                      </button>
+                    ))}
                   </div>
                   {bandProfile !== 'flat' && (() => {
                     const halfBW = (Number(bandWidth) || 4) / 2;
@@ -4200,6 +4432,7 @@ function App() {
                           step={0.05}
                           onChange={setBandProfileSize}
                           unit="mm"
+                          hint={bandProfile === 'bevel' ? 'Width of each 45° chamfer along the band edges.' : 'How far the dome drops from the middle of the band to its edges.'}
                         />
                         <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
                           <span>
@@ -4216,196 +4449,6 @@ function App() {
                       </div>
                     );
                   })()}
-                  <ControlSlider label="US Ring Size" value={ringSize} min={3} max={15} step={0.25} onChange={setRingSize} unit="US" />
-                  <ControlSlider label="Band Thickness" value={bandThickness} min={1.2} max={4.0} step={0.1} onChange={setBandThickness} unit="mm" />
-                  <ControlSlider label="Stone Depth (% of standard cut)" value={stoneDepthPct} min={60} max={140} step={1} onChange={setStoneDepthPct} unit="%" />
-                  <p className="-mt-1 text-[11px] text-gray-500">
-                    At 100%, each cut uses its standard depth: a 6 mm round is {getStoneDepth('Round Brilliant', 6, stoneDepthPct).toFixed(2)} mm deep{Number(stoneDepthPct) !== 100 ? ` at ${Number(stoneDepthPct)}%` : ''}.
-                  </p>
-                  {(() => {
-                    const isAuto = !isSetNumber(settingHeight);
-                    const firstInfo = ring3DData.stoneInfo?.[effectiveStones[0]?.id];
-                    const shown = isAuto ? Number(Math.max(0, firstInfo?.girdleHeight ?? 0).toFixed(2)) : settingHeight;
-                    return (
-                      <div className="flex flex-col gap-1 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                        <ControlSlider
-                          label={`Setting Height${isAuto ? ' (auto)' : ''}`}
-                          value={shown}
-                          min={0}
-                          max={6}
-                          step={0.05}
-                          onChange={setSettingHeight}
-                          unit="mm"
-                        />
-                        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
-                          <span>
-                            {isAuto
-                              ? 'Girdle height above the band. Auto sinks each stone as deep as its socket allows.'
-                              : 'Girdle height above the band for every stone.'}
-                          </span>
-                          {!isAuto && (
-                            <button onClick={() => setSettingHeight(null)} className="font-semibold text-emerald-700 hover:text-emerald-800 underline">
-                              Auto
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <ControlSlider label="Max Socket Depth" value={pocketDepthInput} min={0.2} max={1.5} step={0.05} onChange={setPocketDepthInput} unit="mm" />
-                  {Number(pocketDepthInput) > Math.max(1.2, Number(bandThickness) || 1.8) * 0.72 + 0.005 && (
-                    <p className="-mt-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
-                      Sockets are capped at {(Math.max(1.2, Number(bandThickness) || 1.8) * 0.72).toFixed(2)} mm (72% of the band thickness) so the band stays intact.
-                    </p>
-                  )}
-
-                  <div className="bg-gray-50 p-2.5 border border-gray-200 rounded-lg mt-0.5 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="unique-stone-3d"
-                          checked={uniqueStone3D}
-                          onChange={(e) => setUniqueStone3D(e.target.checked)}
-                          className="w-3.5 h-3.5 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
-                        />
-                        <label htmlFor="unique-stone-3d" className="text-xs font-bold text-gray-700 cursor-pointer select-none">
-                          Per-stone setting height, stone depth and socket depth
-                        </label>
-                      </div>
-                      {uniqueStone3D && (
-                        <button
-                          onClick={() => setStones(prev => prev.map(s => ({ ...s, settingHeightOverride: '', depthOverride: '', pocketDepthOverride: '' })))}
-                          className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800 underline"
-                        >
-                          Reset All
-                        </button>
-                      )}
-                    </div>
-
-                    {uniqueStone3D && (
-                      <div className="flex gap-2 overflow-x-auto pb-1.5 pt-0.5" style={{ scrollbarWidth: 'thin' }}>
-                        {effectiveStones.map((stone, sIdx) => {
-                          const isStoneLinked = !!stones[sIdx]?.linkedTo;
-                          return (
-                            <div
-                              key={stone.id}
-                              className={`flex flex-col gap-1.5 shrink-0 bg-white p-2 border rounded-md shadow-sm min-w-[104px] ${
-                                isStoneLinked ? 'border-emerald-200 bg-emerald-50/20 opacity-80' : 'border-gray-200'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-1 border-b border-gray-100 pb-1">
-                                <span className="text-[10px] font-bold text-gray-700 flex items-center gap-1">
-                                  <span
-                                    className="w-2 h-2 rounded-full border border-gray-300 shrink-0"
-                                    style={{ backgroundColor: stone.color }}
-                                  />
-                                  Stone #{sIdx + 1}
-                                </span>
-                                {isStoneLinked && (
-                                  <span className="text-[8px] font-bold text-emerald-600 uppercase">Linked</span>
-                                )}
-                              </div>
-
-                              {[
-                                { key: 'settingHeightOverride', label: 'Setting height (mm)', min: 0, step: 0.05, auto: ring3DData.stoneInfo?.[stone.id]?.girdleHeight },
-                                { key: 'depthOverride', label: 'Stone depth (mm)', min: 0.3, step: 0.05, auto: ring3DData.stoneInfo?.[stone.id]?.depth }
-                              ].map(field => (
-                                <div key={field.key} className="flex flex-col gap-0.5">
-                                  <span className="text-[9px] font-bold text-gray-400 uppercase">{field.label}</span>
-                                  <input
-                                    type="number" min={field.min} step={field.step}
-                                    disabled={isStoneLinked}
-                                    value={stone[field.key] === undefined || stone[field.key] === null ? '' : stone[field.key]}
-                                    placeholder={Number.isFinite(field.auto) ? `Auto ${Math.max(0, field.auto).toFixed(2)}` : 'Auto'}
-                                    onChange={(e) => updateStone(sIdx, { [field.key]: e.target.value === '' ? '' : Number(e.target.value) })}
-                                    onBlur={() => { const v = stone[field.key]; if (isSetNumber(v) && Number(v) < field.min) updateStone(sIdx, { [field.key]: field.min }); else if (v !== '' && v !== undefined && v !== null && !isSetNumber(v)) updateStone(sIdx, { [field.key]: '' }); }}
-                                    onKeyDown={blurOnEnter}
-                                    className="w-full text-[10px] border border-gray-200 rounded py-0.5 px-1 outline-none bg-gray-50 font-mono text-gray-700 focus:border-emerald-500 disabled:opacity-60"
-                                  />
-                                </div>
-                              ))}
-
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-[9px] font-bold text-gray-400 uppercase">Max socket depth (mm)</span>
-                                <input
-                                  type="number" min={0.2} step={0.05}
-                                  disabled={isStoneLinked}
-                                  value={stone.pocketDepthOverride === undefined || stone.pocketDepthOverride === null ? '' : stone.pocketDepthOverride}
-                                  placeholder={`Global ${pocketDepthInput.toFixed(2)}`}
-                                  onChange={(e) => updateStone(sIdx, { pocketDepthOverride: e.target.value === '' ? '' : Number(e.target.value) })}
-                                  onBlur={() => { const v = stone.pocketDepthOverride; if (v !== '' && v !== undefined && v !== null && (!Number.isFinite(Number(v)) || Number(v) < 0.2)) updateStone(sIdx, { pocketDepthOverride: 0.2 }); }}
-                                  onKeyDown={blurOnEnter}
-                                  className="w-full text-[10px] border border-gray-200 rounded py-0.5 px-1 outline-none bg-gray-50 font-mono text-gray-700 focus:border-emerald-500 disabled:opacity-60"
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200 pb-1.5">
-                    Slicer &amp; Multi-Part Export
-                  </label>
-
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Band Cutout Mode</span>
-                    <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-md border border-gray-200">
-                      {[
-                        { id: 'pocket_and_gem', label: 'Pocket + Gem' },
-                        { id: 'sockets_only', label: 'Empty Sockets' },
-                        { id: 'solid_band', label: 'Solid Band' }
-                      ].map(mode => (
-                        <button
-                          key={mode.id}
-                          onClick={() => setCutoutMode(mode.id)}
-                          className={`py-1.5 px-1.5 rounded text-[10px] font-bold transition-all ${
-                            cutoutMode === mode.id
-                              ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
-                              : 'text-gray-500 hover:text-gray-800'
-                          }`}
-                        >
-                          {mode.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 flex flex-col gap-2">
-                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer hover:text-emerald-700">
-                      <input
-                        type="checkbox"
-                        checked={include3DSettings}
-                        onChange={e => setInclude3DSettings(e.target.checked)}
-                        className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
-                      />
-                      Include Separate 3D Prongs/Bezels
-                    </label>
-                    <p className="text-[10px] text-gray-500 leading-relaxed">
-                      <strong>100% Welded Manifold:</strong> In OrcaSlicer, Bambu Studio, or Anycubic Slicer, <em>Split to Parts</em> gives <strong>1 solid Ring Band with carved sockets</strong> + <strong>{stones.length} Gem(s)</strong> + shape-fitted 3D Bezels/V-Prongs.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-0.5">
-                    <button
-                      onClick={handleExport3MF}
-                      className="py-2 px-3 rounded-lg bg-white ring-1 ring-gray-300 hover:bg-gray-50 text-gray-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <PackageCheck className="w-4 h-4" />
-                      Export 3D 3MF
-                    </button>
-                    <button
-                      onClick={handleExportSTL}
-                      className="py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
-                    >
-                      <Printer className="w-4 h-4" />
-                      Export 3D STL
-                    </button>
-                  </div>
                 </div>
               </div>
             )}
@@ -4414,7 +4457,7 @@ function App() {
           <section>
             <div className="flex flex-wrap justify-between items-center gap-3 mb-4 border-b border-gray-200 pb-3">
               <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-emerald-600" />
+                <Gem className="w-5 h-5 text-emerald-600" />
                 Stones
                 <span className="text-[11px] font-mono tabular text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md">{stones.length}</span>
               </h2>
@@ -4453,15 +4496,23 @@ function App() {
                 return (
                   <div key={stone.id} className="flex flex-col gap-1.5 relative">
                     <div className="flex justify-between items-center px-1">
-                      <span className="font-bold text-gray-700 text-sm flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full shadow-inner border border-gray-300" style={{ backgroundColor: stone.color }} />
-                        Stone {index + 1} {index === 0 && layoutMode === 'cluster' && <span className="text-gray-400 font-normal ml-0.5">(Anchor)</span>}
-                      </span>
-                      <div className="flex items-center gap-3">
+                      {(() => {
+                        const desc = `${stone.shape} ${stone.colorMode === 'custom' ? 'Custom Gemstone' : (stone.preset || 'Diamond')}`;
+                        const anchor = index === 0 && layoutMode === 'cluster';
+                        return (
+                          <span className="font-bold text-gray-700 text-sm flex items-center gap-2 min-w-0" title={`Stone ${index + 1}: ${desc}${anchor ? ' (anchor)' : ''}`}>
+                            <span className="w-3 h-3 rounded-full shadow-inner border border-gray-300 shrink-0" style={{ backgroundColor: stone.color }} />
+                            <span className="shrink-0">Stone {index + 1}</span>
+                            <span className="text-gray-400 font-normal truncate">{desc}{anchor ? ' (Anchor)' : ''}</span>
+                          </span>
+                        );
+                      })()}
+                      <div className="flex items-center gap-3 shrink-0">
                         {index > 0 && (
                           <div className="flex items-center gap-1">
                             <LinkIcon className={`w-3.5 h-3.5 ${isLinked ? 'text-emerald-500' : 'text-gray-400'}`} />
                             <select
+                              title="Mirror another stone: copy its shape, color, size and setting, flipped to the other side"
                               value={stones[index].linkedTo || ''}
                               onChange={(e) => updateStone(index, { linkedTo: e.target.value ? Number(e.target.value) : null })}
                               className={`text-[10px] font-semibold rounded py-0.5 px-1 outline-none transition-colors cursor-pointer border ${
@@ -4526,7 +4577,7 @@ function App() {
 
                       <div className="grid grid-cols-3 gap-2">
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Shape</span>
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">Shape<Hint text="The stone's cut. Each cut has its own outline, facet drawing and standard depth." /></span>
                           <select
                             disabled={isLinked}
                             value={stone.shape || 'Round Brilliant'}
@@ -4538,7 +4589,7 @@ function App() {
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Mode</span>
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">Mode<Hint text="Stone: pick a gemstone. Color: pick any color with the color picker." /></span>
                           <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[28px] ${isLinked ? 'opacity-75' : ''}`}>
                             <button
                               disabled={isLinked}
@@ -4558,7 +4609,7 @@ function App() {
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide truncate">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide truncate" title={stone.colorMode === 'preset' ? 'Diamond, ruby, sapphire, emerald and aquamarine carat sizes use their own density.' : 'Any color for the stone.'}>
                             {stone.colorMode === 'preset' ? 'Gemstone' : 'Custom'}
                           </span>
                           {stone.colorMode === 'preset' ? (
@@ -4587,6 +4638,7 @@ function App() {
                         <div className="flex flex-col gap-1.5 justify-center">
                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
                             <Crown className="w-3 h-3" /> Setting Style
+                            <Hint text="How the stone is held: prongs, a V-prong, a bezel cup, a halo of small stones, flush in the band, or no setting." />
                           </span>
                           <select
                             disabled={isLinked}
@@ -4601,7 +4653,7 @@ function App() {
                         {stone.settingStyle === 'Bezel' && (
                           <>
                             <div className="flex flex-col gap-1.5 justify-center">
-                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Bezel Color</span>
+                              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Bezel Metal</span>
                               <select
                                 disabled={isLinked}
                                 value={stone.bezelColor || 'gold'}
@@ -4611,11 +4663,13 @@ function App() {
                                 <option value="gold">Gold</option>
                                 <option value="silver">Silver</option>
                                 <option value="black">Black</option>
+                                <option value="custom">Custom (band color)</option>
                               </select>
                             </div>
                             <div className="flex flex-col justify-center translate-y-1">
                               <CompactControl
                                 label="Bezel Size"
+                                hint="Thickness of the bezel wall around the stone, in mm."
                                 value={stone.bezelSize || 0.5}
                                 min={0.1} max={2.0} step={0.1}
                                 disabled={isLinked}
@@ -4631,7 +4685,7 @@ function App() {
                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2 block">Halo Configuration</span>
 
                           <div className="grid grid-cols-2 gap-4 mb-3">
-                            <CompactControl label="Halo Stone Size" value={stone.haloSize || 1.0} min={0.5} max={3.0} step={0.1} disabled={isLinked} onChange={(v) => updateStone(index, { haloSize: v })} />
+                            <CompactControl label="Halo Stone Size" hint="Width of each small stone in the halo, in mm." value={stone.haloSize || 1.0} min={0.5} max={3.0} step={0.1} disabled={isLinked} onChange={(v) => updateStone(index, { haloSize: v })} />
 
                             <div className="flex flex-col gap-1.5">
                               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Base Halo Color</span>
@@ -4657,6 +4711,7 @@ function App() {
                             />
                             <label htmlFor={`unique-${index}`} className="text-xs font-semibold text-gray-700 cursor-pointer select-none">
                               Unique stones in halo
+                              <Hint text="Pick a different gemstone for each stone in the halo." />
                             </label>
                           </div>
 
@@ -4699,7 +4754,7 @@ function App() {
                         };
                         return (
                           <div className="flex items-center justify-between gap-2 pt-1">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Size</span>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">Size<Hint text="Manual width: type the width in mm. Carat: pick a weight and the stone is sized from the carat chart." /></span>
                             <div role="radiogroup" aria-label={`Size mode for stone ${index + 1}`} className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 ${isLinked ? 'opacity-75' : ''}`}>
                               <button
                                 role="radio"
@@ -4744,10 +4799,10 @@ function App() {
                             </select>
                           </div>
                         ) : (
-                          <CompactControl label="Width" value={stone.width} min={1} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { width: v })} />
+                          <CompactControl label="Width" hint="The stone's width in mm. Its length follows from the shape's standard proportions." value={stone.width} min={1} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { width: v })} />
                         )}
-                        <CompactControl label="Y-Offset" value={stone.heightOffset} min={-15} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { heightOffset: v })} />
-                        <CompactControl label="Rot (deg)" value={stone.rotation} min={0} max={360} step={1} disabled={isLinked} onChange={(v) => updateStone(index, { rotation: v })} />
+                        <CompactControl label="Y-Offset" hint="Move the stone across the band, toward one edge or the other, in mm." value={stone.heightOffset} min={-15} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { heightOffset: v })} />
+                        <CompactControl label="Rot (deg)" hint="Rotate the stone, in degrees. 90° turns a long stone to lie along the band." value={stone.rotation} min={0} max={360} step={1} disabled={isLinked} onChange={(v) => updateStone(index, { rotation: v })} />
                       </div>
 
                       {stone.sizeMode === 'carat' && hasCaratSizes(stone.shape) && (
@@ -4760,7 +4815,7 @@ function App() {
 
                       <div className="pt-2 border-t border-gray-100 mt-2">
                         {layoutMode === 'scatter' ? (
-                          <CompactControl label={index === 0 ? "Locked (Anchor)" : "Dist. From Neighbor"} value={index === 0 ? 0 : stone.gap} min={-10} max={15} step={0.25} disabled={index === 0 || isLinked} onChange={(v) => updateStone(index, { gap: v })} />
+                          <CompactControl label={index === 0 ? "Locked (Anchor)" : "Dist. From Neighbor"} hint={index === 0 ? undefined : 'Space between this stone and the one before it, in mm.'} value={index === 0 ? 0 : stone.gap} min={-10} max={15} step={0.25} disabled={index === 0 || isLinked} onChange={(v) => updateStone(index, { gap: v })} />
                         ) : (
                           index === 0 ? (
                             <div className="w-full text-center py-2 bg-gray-50 rounded border border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wide">
@@ -4769,7 +4824,7 @@ function App() {
                           ) : (
                             <div className="grid grid-cols-2 gap-4">
                               <div className="flex flex-col gap-1.5">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Side</span>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">Side<Hint text="Which side of the center stone this stone sits on." /></span>
                                 <div className={`flex bg-gray-100 p-0.5 rounded border border-gray-200 h-[26px] ${isLinked ? 'opacity-75' : ''}`}>
                                   <button
                                     disabled={isLinked}
@@ -4783,11 +4838,73 @@ function App() {
                                   >Right</button>
                                 </div>
                               </div>
-                              <CompactControl label="Dist From Center" value={stone.centerOffset} min={0} max={30} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { centerOffset: v })} />
+                              <CompactControl label="Dist From Center" hint="Distance from the center of the ring to this stone's center, in mm." value={stone.centerOffset} min={0} max={30} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { centerOffset: v })} />
                             </div>
                           )
                         )}
                       </div>
+                      {(() => {
+                        const info = ring3DData.stoneInfo?.[stone.id];
+                        const own = stones[index];
+                        const fields = [
+                          { key: 'settingHeightOverride', label: 'Setting height', min: 0, max: 6, auto: Math.max(0, info?.girdleHeight ?? 0),
+                            hint: "How high this stone's girdle sits above the band, in mm. Overrides the Setting Height in Print settings." },
+                          { key: 'depthOverride', label: 'Stone depth', min: 0.3, max: Math.max(8, Math.ceil((Number(stone.width) || 6) * 1.2)), auto: info?.depth ?? 0,
+                            hint: "This stone's total depth from table to culet, in mm. Overrides the standard depth for its cut." },
+                          { key: 'pocketDepthOverride', label: 'Max socket depth', min: 0.2, max: 1.5, auto: Number(pocketDepthInput) || 0.75,
+                            hint: 'The deepest this stone may sink into the band, in mm. Overrides Max Socket Depth in Print settings.' }
+                        ];
+                        const anySet = fields.some(f => isSetNumber(own[f.key]));
+                        return (
+                          <div className="pt-2 border-t border-gray-100 flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between gap-2" title="Give this stone its own setting height, stone depth and socket depth instead of the Print settings values.">
+                              <label htmlFor={`custom-setting-${stone.id}`} className={`text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1 select-none ${isLinked ? '' : 'cursor-pointer'}`}>
+                                <input
+                                  id={`custom-setting-${stone.id}`}
+                                  type="checkbox"
+                                  disabled={isLinked}
+                                  checked={!!stone.customSettings}
+                                  onChange={(e) => updateStone(index, { customSettings: e.target.checked })}
+                                  className="w-3.5 h-3.5 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                                />
+                                Custom setting
+                                <Hint text="Give this stone its own setting height, stone depth and socket depth instead of the Print settings values." />
+                              </label>
+                              {stone.customSettings && anySet && !isLinked && (
+                                <button
+                                  onClick={() => updateStone(index, { settingHeightOverride: '', depthOverride: '', pocketDepthOverride: '' })}
+                                  className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-800 underline"
+                                >
+                                  Reset to auto
+                                </button>
+                              )}
+                            </div>
+                            {stone.customSettings && (
+                              <div className="flex flex-col gap-2.5 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                                {fields.map(f => {
+                                  const isAuto = !isSetNumber(stone[f.key]);
+                                  const shownAuto = Number(f.auto.toFixed(2));
+                                  return (
+                                    <CompactControl
+                                      key={f.key}
+                                      label={`${f.label} (mm)${isAuto ? ' · auto' : ''}`}
+                                      value={isAuto ? shownAuto : stone[f.key]}
+                                      min={f.min} max={f.max} step={0.05}
+                                      disabled={isLinked}
+                                      hint={f.hint}
+                                      onChange={(v) => {
+                                        // Leaving the field without changing it keeps it on auto.
+                                        if (isAuto && Number(v) === shownAuto) return;
+                                        updateStone(index, { [f.key]: v });
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );

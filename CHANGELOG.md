@@ -1,5 +1,20 @@
 # MikeyTime Ring Studio changelog
 
+## v1.5.0
+
+### New
+- **Display settings gear** in the top-right corner of the preview. It opens a pop-up with the bottom ruler (scale and offset), measurement overlays (gem widths, gaps, vertical drop and label size), Hide shadows on 2D view, and a new **Show measurements under preview** switch for the ring size / bore / outer diameter / band / parts readout, which is now off by default.
+- **Print settings pop-up.** In 3D Model view, a Print settings button next to the view switch opens stone depth, setting height, max socket depth, band cutout mode, separate prongs/bezels and STL/3MF export. The old 3D Print Settings section is gone.
+- **Custom band color.** Metal now has a fourth option, Custom, with a color picker. It shows in the blueprint (with its own metal shading), the 3D model, exports and the BOM. Bezels can use it too (Custom (band color)).
+- **Custom setting on each stone.** Setting height, stone depth and max socket depth for a single stone are now set at the bottom of that stone's card: turn on Custom setting and sliders appear, starting from the stone's automatic values. This replaces the single per-stone switch in 3D Print Settings; designs saved with that switch on load with Custom setting turned on for the stones that had values.
+- **Hover help.** Most sliders, switches and pickers have an ⓘ icon and hover text explaining what they do.
+
+### Improved
+- **Band Settings** (was Band & Blueprint) holds everything about the band: metal, US ring size (with the bore diameter), band width, band thickness, band profile, and Hide shadows on 2D view (also in Display settings). It has a new band icon.
+- Canvas zoom is a slider under the 2D preview.
+- Each stone's title names it: "Stone 1 Oval Ruby", or "Round Brilliant Custom Gemstone" for a custom color.
+- "Flat Band (No 3D/Shadow)" is renamed "Hide shadows on 2D view".
+
 ## v1.4.0
 
 ### New
