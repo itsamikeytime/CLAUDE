@@ -169,6 +169,21 @@ const CARAT_SIZES = {
 };
 const hasCaratSizes = (shape) => !!CARAT_SIZES[shape];
 
+// Specific gravity (g/cm³) for the gemstones with density-adjusted carat
+// sizes. Ruby and sapphire are both corundum; emerald and aquamarine are both
+// beryl (2.72 and 2.70, within 0.03 mm of each other at these sizes).
+const DIAMOND_DENSITY = 3.52;
+const GEM_DENSITY = { Diamond: 3.52, Ruby: 4.0, Sapphire: 4.0, Emerald: 2.71, Aquamarine: 2.71 };
+
+// Linear size multiplier versus diamond at the same carat weight: weight
+// scales with volume, so size scales with the cube root of diamond density ÷
+// gem density (corundum 0.958, beryl 1.091). Any other gemstone, or a custom
+// color, uses diamond-equivalent sizes.
+const getCaratSizeFactor = (stone) => {
+  const density = stone.colorMode !== 'custom' ? GEM_DENSITY[stone.preset || 'Diamond'] : undefined;
+  return density ? { factor: Math.cbrt(DIAMOND_DENSITY / density), densityBased: true } : { factor: 1, densityBased: false };
+};
+
 // A stone's size in mm. Carat mode reads the standard chart (including its
 // depth); manual mode uses the typed width, the cut's length ratio, and
 // leaves depth to the cut's standard percentage.
@@ -177,7 +192,8 @@ const getStoneSize = (stone) => {
   if (stone.sizeMode === 'carat' && hasCaratSizes(shape)) {
     const carat = CARAT_STEPS.includes(Number(stone.carat)) ? Number(stone.carat) : 1;
     const [length, width, depth] = CARAT_SIZES[shape][CARAT_STEPS.indexOf(carat)];
-    return { width, length, chartDepth: depth, carat };
+    const { factor } = getCaratSizeFactor(stone);
+    return { width: width * factor, length: length * factor, chartDepth: depth * factor, carat };
   }
   const width = Number(stone.width) || 0;
   return { width, length: width * (SHAPE_RATIOS[shape] || 1), chartDepth: null, carat: null };
@@ -3264,7 +3280,9 @@ function App() {
         : stone.settingStyle === 'Halo' ? `Halo (${mm(stone.haloSize || 1)} mm stones)` : stone.settingStyle;
       rows.push([
         `Stone ${i + 1}`, 1, `Stone (${role})`,
-        stone.sizeMode === 'carat' && hasCaratSizes(stone.shape) ? `${stone.shape} (${Number(stone.carat).toFixed(2)} ct)` : stone.shape,
+        stone.sizeMode === 'carat' && hasCaratSizes(stone.shape)
+          ? `${stone.shape} (${Number(stone.carat).toFixed(2)} ct${getCaratSizeFactor(stone).densityBased ? '' : ' diamond equivalent'})`
+          : stone.shape,
         `${mm(w)} × ${mm(h)} × ${mm(depthMM)}`,
         stone.colorMode === 'preset' ? stone.preset : `Custom ${stone.color}`,
         setting,
@@ -4674,8 +4692,9 @@ function App() {
                         const chart = CARAT_SIZES[stone.shape];
                         const toCarat = () => {
                           // Start from the chart weight closest to the current width.
+                          const { factor } = getCaratSizeFactor(stone);
                           let best = 0;
-                          chart.forEach(([, cw], i) => { if (Math.abs(cw - stone.width) < Math.abs(chart[best][1] - stone.width)) best = i; });
+                          chart.forEach(([, cw], i) => { if (Math.abs(cw * factor - stone.width) < Math.abs(chart[best][1] * factor - stone.width)) best = i; });
                           updateStone(index, { sizeMode: 'carat', carat: CARAT_STEPS[best] });
                         };
                         return (
@@ -4686,7 +4705,7 @@ function App() {
                                 role="radio"
                                 aria-checked={!isCarat}
                                 disabled={isLinked}
-                                onClick={() => { if (isCarat) updateStone(index, { sizeMode: 'width', width: stone.width }); }}
+                                onClick={() => { if (isCarat) updateStone(index, { sizeMode: 'width', width: Number(Number(stone.width).toFixed(2)) }); }}
                                 className={`px-2.5 py-1 text-[10px] font-bold rounded uppercase transition-colors ${!isCarat ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                               >
                                 Manual width
@@ -4719,7 +4738,8 @@ function App() {
                             >
                               {CARAT_STEPS.map((ct, i) => {
                                 const [cl, cw] = CARAT_SIZES[stone.shape][i];
-                                return <option key={ct} value={String(ct)} title={`${cw} × ${cl} mm`}>{ct.toFixed(2)} ct</option>;
+                                const f = getCaratSizeFactor(stone).factor;
+                                return <option key={ct} value={String(ct)} title={`${(cw * f).toFixed(2)} × ${(cl * f).toFixed(2)} mm`}>{ct.toFixed(2)} ct</option>;
                               })}
                             </select>
                           </div>
@@ -4729,6 +4749,14 @@ function App() {
                         <CompactControl label="Y-Offset" value={stone.heightOffset} min={-15} max={15} step={0.25} disabled={isLinked} onChange={(v) => updateStone(index, { heightOffset: v })} />
                         <CompactControl label="Rot (deg)" value={stone.rotation} min={0} max={360} step={1} disabled={isLinked} onChange={(v) => updateStone(index, { rotation: v })} />
                       </div>
+
+                      {stone.sizeMode === 'carat' && hasCaratSizes(stone.shape) && (
+                        <p className="-mt-1 text-[11px] text-gray-500 italic">
+                          {getCaratSizeFactor(stone).densityBased
+                            ? "Displaying Carat Measurements Based on Selected Stone's Density"
+                            : 'Displaying Diamond Equivalent Weight for Carat Selection'}
+                        </p>
+                      )}
 
                       <div className="pt-2 border-t border-gray-100 mt-2">
                         {layoutMode === 'scatter' ? (
