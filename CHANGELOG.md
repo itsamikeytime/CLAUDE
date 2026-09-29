@@ -1,5 +1,10 @@
 # MikeyTime Ring Studio changelog
 
+## v1.4.4
+
+### Fixed
+- **Prongs sit on top of the stone's gloss.** In the 2D blueprint the stone's highlight was drawn over the setting, washing out prongs (and V-prong and halo metal) where they overlap the stone's edge. The setting is now drawn above it.
+
 ## v1.4.3
 
 ### Fixed

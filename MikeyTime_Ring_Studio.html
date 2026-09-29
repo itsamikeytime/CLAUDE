@@ -148,7 +148,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.4.3';
+const APP_VERSION = '1.4.4';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -4360,7 +4360,6 @@ function App() {
                           </g>
                         );
                       })()}
-                      {stone.settingStyle && stone.settingStyle !== 'None' && renderSetting(stone, hw, hh, pSize, basePath)}
                     </g>
 
                     <g clipPath={`url(#clip-${stone.id})`}>
@@ -4369,6 +4368,14 @@ function App() {
                     <clipPath id={`clip-${stone.id}`}>
                       <path d={basePath} transform={`rotate(${rotation})`} />
                     </clipPath>
+
+                    {/* The setting goes over the stone's gloss, so prongs that
+                        overlap the stone's edge aren't washed out by it. */}
+                    {stone.settingStyle && stone.settingStyle !== 'None' && (
+                      <g transform={`rotate(${rotation})`}>
+                        {renderSetting(stone, hw, hh, pSize, basePath)}
+                      </g>
+                    )}
                   </g>
                 );
               })}
