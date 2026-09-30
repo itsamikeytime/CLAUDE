@@ -1,5 +1,11 @@
 # MikeyTime Ring Studio changelog
 
+## v1.4.5
+
+### Improved
+- **Sockets shaped like the stone.** Each socket now follows its stone's tapered underside (the pavilion) down to the culet, in the stone's own outline: a cone for a round, a four-sided pyramid for a princess, and so on. Before, sockets had straight walls and a flat floor, so a printed stone only touched at its tip and the rim and sat loose. The gap between stone and socket dropped from about 0.8 mm to about 0.2 mm, and stones never overlap their socket. Crescent Moon sockets keep a flat floor.
+- **Socket Clearance** (Print settings): the smallest gap left between each stone and its socket, from 0 to 0.4 mm (default 0.1 mm). Try about 0.1 mm for resin printers and 0.15–0.2 mm for FDM.
+
 ## v1.4.4
 
 ### Fixed

@@ -148,7 +148,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.4.4';
+const APP_VERSION = '1.4.5';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -1154,6 +1154,7 @@ const build3DRingShells = ({
   pocketDepthInput,
   include3DSettings,
   bandCustomColor = DEFAULT_CUSTOM_METAL,
+  socketClearance = 0.1,
   cutoutMode = 'pocket_and_gem',
   bandProfile = 'flat',
   bandProfileSize = null
@@ -1399,7 +1400,66 @@ const build3DRingShells = ({
       }));
     }
     const hasSocket = sink >= 0.05 && (isFlushStone || culetOnBand);
-    const stoneRFloor = surfR(stone.y) - (sink + 0.05);
+    // ---- Socket floor shaped like the pavilion -----------------------------
+    // Every pavilion cross-section is the girdle outline scaled about the
+    // culet's centre (by 0.04 at the culet up to 1 at the girdle), so a point
+    // in the socket lies on the section of scale k, found by casting a ray
+    // from the culet's centre to the girdle outline. That fixes the
+    // pavilion's height above it, and the floor is carved `clearance` below
+    // that, measured in the stone's own flat frame, so the stone drops into a
+    // matching cone instead of a straight-walled hole. (The crescent's keel
+    // isn't a scaled outline; its socket keeps a flat floor.)
+    const clearance = Math.max(0, Math.min(0.5, Number(socketClearance) || 0));
+    const rC = surfR(stone.y);
+    const zCuletRel = zGirdleBot - pavH;
+    const stoneRFloor = rC + zCuletRel - clearance;
+    const gaugeFromCulet = (pu, pv) => {
+      const dx = pu - culetCenter.u, dy = pv - culetCenter.v;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1e-9) return 0;
+      const rx = dx / dist, ry = dy / dist;
+      // The farthest crossing: a heart's notch can put two crossings on one
+      // ray, and the lower pavilion (the one the floor must clear) is the far one.
+      let tHit = -Infinity;
+      for (let i = 0; i < worldPts.length; i++) {
+        const a = worldPts[i], b = worldPts[(i + 1) % worldPts.length];
+        const ex = b.u - a.u, ey = b.v - a.v;
+        const den = rx * ey - ry * ex;
+        if (Math.abs(den) < 1e-12) continue;
+        const ax = a.u - culetCenter.u, ay = a.v - culetCenter.v;
+        const t = (ax * ey - ay * ex) / den;
+        const s2 = (ax * ry - ay * rx) / den;
+        if (t > 1e-9 && s2 >= -1e-9 && s2 <= 1 + 1e-9 && t > tHit) tHit = t;
+      }
+      return Number.isFinite(tHit) ? dist / tHit : 1;
+    };
+    const pavilionZExact = (pu, pv) => {
+      const k = gaugeFromCulet(pu, pv);
+      const f = Math.max(0, Math.min(1, (k - 0.04) / 0.96));
+      return zCuletRel + f * pavH;
+    };
+    // The floor is made of flat triangles between grid points, which can ride
+    // a little above the cone where it bends sharply (the culet, a heart's
+    // point, a princess's corner ridges), even when no corner of the triangle
+    // sits on the bend. Each floor point takes the lowest cone height within
+    // RIDGE_R, which keeps whole triangles, not just their corners, clear of
+    // the stone (the clearance is then the minimum gap, not the average).
+    const RIDGE_R = 0.08;
+    const ridgeOffsets = [[0, 0]].concat([0, 1, 2, 3, 4, 5].map(i => [RIDGE_R * Math.cos(i * Math.PI / 3), RIDGE_R * Math.sin(i * Math.PI / 3)]));
+    const pavilionZAt = (pu, pv) => ridgeOffsets.reduce((m, [ou, ov]) => Math.min(m, pavilionZExact(pu + ou, pv + ov)), Infinity);
+    const socketFloorR = isCrescent
+      ? () => stoneRFloor
+      : (u, v) => {
+          const phi = (u - stone.x) / outerRadius;
+          const tanPhi = Math.tan(phi);
+          let z = zCuletRel - clearance, du = 0;
+          for (let it = 0; it < 3; it++) {
+            du = (rC + z) * tanPhi;
+            z = pavilionZAt(stone.x + du, v) - clearance;
+          }
+          du = (rC + z) * tanPhi;
+          return Math.max(stoneRFloor, Math.hypot(rC + z, du));
+        };
     const cornerUVs = cutContourUV.filter(pt => pt.isCorner);
 
     return {
@@ -1427,6 +1487,7 @@ const build3DRingShells = ({
       raisedForSocket,
       stonePocketDepth,
       stoneRFloor,
+      socketFloorR,
       requestedPocketDepth: (stone.customSettings && isSetNumber(stone.pocketDepthOverride))
         ? Number(stone.pocketDepthOverride)
         : Number(pocketDepthInput)
@@ -1583,7 +1644,7 @@ const build3DRingShells = ({
         const res = evalPocketSignedDist(u, v);
         d = res.d;
         if (res.stone) {
-          localRFloor = res.stone.stoneRFloor;
+          localRFloor = res.stone.socketFloorR(u, v);
         }
         if (Math.abs(d) < 0.032 && res.stone && res.stone.snapToContour && !isFoldRow(v)) {
           let snapped = projectPointToPolygonContour2D(u, v, res.stone.cutContourUV);
@@ -1600,6 +1661,10 @@ const build3DRingShells = ({
         }
       }
 
+      if (d === 0 && inCrown) {
+        const snappedStone = evalPocketSignedDist(u, v).stone;
+        if (snappedStone) localRFloor = snappedStone.socketFloorR(u, v);
+      }
       gridUV[idx] = { u, v, idx, rFloor: localRFloor };
       gridDist[idx] = d;
       gridOutVerts[idx] = wrapPoint(u, v, surfR(v));
@@ -1639,7 +1704,7 @@ const build3DRingShells = ({
     let cu = uvA.u + (uvB.u - uvA.u) * t;
     let cv = uvA.v + (uvB.v - uvA.v) * t;
     const hint = evalPocketSignedDist(cu, cv).stone;
-    const crossRFloor = hint ? hint.stoneRFloor : defaultRFloor;
+    let crossRFloor = hint ? hint.socketFloorR(cu, cv) : defaultRFloor;
     if (hint && hint.cutContourUV && hint.snapToContour) {
       const proj = projectPointToPolygonContour2D(cu, cv, hint.cutContourUV);
       cu = proj.u;
@@ -1668,6 +1733,7 @@ const build3DRingShells = ({
       }
     }
 
+    if (hint) crossRFloor = hint.socketFloorR(cu, cv);
     cached = {
       out: wrapPoint(cu, cv, surfR(cv)),
       flr: wrapPoint(cu, cv, Math.min(crossRFloor, surfR(cv) - 0.12))
@@ -3010,6 +3076,8 @@ function App() {
   const [settingHeight, setSettingHeight] = useState(null);
   const [stoneDepthPct, setStoneDepthPct] = useState(100);
   const [pocketDepthInput, setPocketDepthInput] = useState(0.75);
+  // Gap left between each stone's pavilion and its socket, for printing.
+  const [socketClearance, setSocketClearance] = useState(0.1);
   const [include3DSettings, setInclude3DSettings] = useState(true);
   const [cutoutMode, setCutoutMode] = useState('pocket_and_gem');
   const [bandProfile, setBandProfile] = useState('flat');
@@ -3087,7 +3155,7 @@ function App() {
   // a short pause, so one slider drag or typed number is one undo step.
   const designSnapshot = {
     stones, bandColor, bandCustomColor, bandWidth, layoutMode, ringSize, bandThickness, settingHeight, stoneDepthPct,
-    pocketDepthInput, include3DSettings, cutoutMode, bandProfile, bandProfileSize
+    pocketDepthInput, socketClearance, include3DSettings, cutoutMode, bandProfile, bandProfileSize
   };
   const designKey = JSON.stringify(designSnapshot);
   const historyRef = useRef({ past: [], presentKey: null, present: null, future: [] });
@@ -3131,6 +3199,7 @@ function App() {
     setSettingHeight(d.settingHeight);
     setStoneDepthPct(d.stoneDepthPct);
     setPocketDepthInput(d.pocketDepthInput);
+    setSocketClearance(d.socketClearance ?? 0.1);
     setInclude3DSettings(d.include3DSettings);
     setCutoutMode(d.cutoutMode);
     setBandProfile(d.bandProfile);
@@ -3256,7 +3325,7 @@ function App() {
       zoom, bandColor, bandCustomColor, bandWidth, isFlatBand, layoutMode,
       showSeparation, showWidth, showVertical, verticalFrom,
       measTextSize, showRuler, rulerScale, rulerOffset, showStats,
-      ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, include3DSettings, cutoutMode, bandProfile, bandProfileSize,
+      ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, socketClearance, include3DSettings, cutoutMode, bandProfile, bandProfileSize,
       stones
     };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
@@ -3293,6 +3362,7 @@ function App() {
           setSettingHeight(isSetNumber(config.settingHeight) ? Number(config.settingHeight) : null);
           setStoneDepthPct(isSetNumber(config.stoneDepthPct) ? Number(config.stoneDepthPct) : 100);
           setPocketDepthInput(config.pocketDepthInput ?? 0.75);
+          setSocketClearance(Number.isFinite(config.socketClearance) ? config.socketClearance : 0.1);
           setInclude3DSettings(config.include3DSettings ?? true);
           setCutoutMode(config.cutoutMode ?? 'pocket_and_gem');
           setBandProfile(BAND_PROFILES.some(bp => bp.id === config.bandProfile) ? config.bandProfile : 'flat');
@@ -3421,11 +3491,12 @@ function App() {
       pocketDepthInput,
       include3DSettings,
       bandCustomColor,
+      socketClearance,
       cutoutMode,
       bandProfile,
       bandProfileSize
     });
-  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, include3DSettings, bandCustomColor, cutoutMode, bandProfile, bandProfileSize]);
+  }, [renderedStones, bandWidth, bandColor, ringSize, bandThickness, settingHeight, stoneDepthPct, pocketDepthInput, include3DSettings, bandCustomColor, socketClearance, cutoutMode, bandProfile, bandProfileSize]);
 
   const handleExportSTL = useCallback(() => {
     const blob = generateBinarySTLBlob(ring3DData.shells, bandWidth);
@@ -4043,6 +4114,13 @@ function App() {
                       Sockets are capped at {(Math.max(1.2, Number(bandThickness) || 1.8) * 0.72).toFixed(2)} mm (72% of the band thickness) so the band stays intact.
                     </p>
                   )}
+                  <ControlSlider
+                    label="Socket Clearance" value={socketClearance} min={0} max={0.4} step={0.02} onChange={setSocketClearance} unit="mm"
+                    hint="The smallest gap between each stone and its socket. Sockets follow the stone's tapered underside down to the culet; this leaves room for printing tolerance. Try 0.1 mm for resin and 0.15–0.2 mm for FDM."
+                  />
+                  <p className="-mt-1 text-[11px] text-gray-500">
+                    Sockets are shaped like each stone's underside, tapering to the culet, with this much room all round.
+                  </p>
                   <p className="text-[11px] text-gray-500">
                     To give one stone its own height, depth or socket, turn on <strong>Custom setting</strong> at the bottom of its card.
                   </p>
