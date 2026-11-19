@@ -1,5 +1,13 @@
 # MikeyTime Ring Studio changelog
 
+## v1.5.1
+
+### Fixed
+- **Phones turned sideways no longer scroll the whole page.** In the side-by-side layouts (sideways phones and computers) the page is now fixed to the screen like the STL Container Maker: only the settings column scrolls, so swiping can't push the preview out of place.
+- **Buttons no longer overlap in narrow stone cards.** Width, Y-Offset and Rotation (and the shape, bezel, halo and side controls) go side by side based on the card's own width instead of the screen's, and stay one per row when a touch screen's − and + buttons wouldn't fit.
+- Sliders give up space before their number boxes do, so the − and + buttons stay inside the card.
+- Dropdowns on touch screens are tall enough for their text (Setting Style used to read "4-Prong" cut off at the bottom).
+
 ## v1.5.0
 
 ### Improved
