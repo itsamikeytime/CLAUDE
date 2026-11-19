@@ -13,15 +13,18 @@ A static web page that turns any closed STL into a two-part print: a hollow cont
 
 ## How it works
 
+- Overlapping shells (common in STLs exported from sculpting tools) are merged into one solid first, and inside-out scraps are dropped.
 - The model is moved so the cut plane is `z = 0`.
 - A voxel distance field measures how far each point inside the model is from its surface. Points near the wall-thickness level get exact distances (via a BVH), then the hollow is the surface at that distance (`Manifold.levelSet`). Pockets that don't reach the opening are dropped so no sealed air bubbles are left behind.
+- Walls are checked against the true surface. Cells the surface passes through count as wall, so folds and slots thinner than the grid are respected, and the hollow is pulled in by a small margin tied to the grid size. Walls come out at or slightly above the minimum you set.
+- The heavy work runs in a background worker (`worker.js`) so the page stays responsive; if a host blocks the worker it runs on the page instead.
 - The plug's outline is the opening narrowed to whatever still fits at every depth it reaches, so it slides straight in, then shrunk by the clearance and extruded onto the lid.
 
 Libraries (loaded from jsDelivr): [three.js](https://threejs.org), [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh), [manifold-3d](https://github.com/elalish/manifold).
 
 ## Hosting
 
-It's plain static files (`index.html`, `app.js`, `core.js`), so any static host works: GitHub Pages, Netlify, Cloudflare Pages, or your own server. It must be served over HTTP(S), not opened as a local `file://`, because it uses ES modules. To try it locally:
+It's plain static files (`index.html`, `app.js`, `core.js`, `worker.js`), so any static host works: GitHub Pages, Netlify, Cloudflare Pages, or your own server. It must be served over HTTP(S), not opened as a local `file://`, because it uses ES modules. To try it locally:
 
 ```bash
 cd stl-container && python3 -m http.server 8000

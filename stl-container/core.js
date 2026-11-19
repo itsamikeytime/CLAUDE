@@ -128,6 +128,27 @@ function voxelizeInside(positions, ox, oy, oz, h, nx, ny, nz) {
   return inside;
 }
 
+// Mark every cell a triangle passes through, by sampling each triangle at half-cell spacing.
+function markSurfaceCells(positions, ox, oy, oz, h, nx, ny, nz) {
+  const out = new Uint8Array(nx * ny * nz);
+  const step = 0.5 * h;
+  for (let t = 0; t < positions.length; t += 9) {
+    const ax = positions[t], ay = positions[t + 1], az = positions[t + 2];
+    const bx = positions[t + 3], by = positions[t + 4], bz = positions[t + 5];
+    const cx = positions[t + 6], cy = positions[t + 7], cz = positions[t + 8];
+    const len = Math.max(Math.hypot(bx - ax, by - ay, bz - az), Math.hypot(cx - bx, cy - by, cz - bz), Math.hypot(ax - cx, ay - cy, az - cz));
+    const n = Math.max(1, Math.ceil(len / step));
+    for (let a = 0; a <= n; a++) for (let b = 0; a + b <= n; b++) {
+      const u = a / n, v = b / n, w = 1 - u - v;
+      const i = Math.floor((u * ax + v * bx + w * cx - ox) / h);
+      const j = Math.floor((u * ay + v * by + w * cy - oy) / h);
+      const k = Math.floor((u * az + v * bz + w * cz - oz) / h);
+      if (i >= 0 && j >= 0 && k >= 0 && i < nx && j < ny && k < nz) out[(k * ny + j) * nx + i] = 1;
+    }
+  }
+  return out;
+}
+
 /**
  * positions: Float32Array triangle soup in the cut frame.
  * opts: { wall, clearance, lipDepth, resolution, onProgress }
@@ -140,17 +161,35 @@ export async function makeContainerAndLid(deps, positions, opts) {
   const keep = (m) => { garbage.push(m); return m; };
 
   await progress('Checking the model…');
-  const model = keep(weldToManifold(wasm, positions));
+  let model = keep(weldToManifold(wasm, positions));
+  // Many STLs are several closed shells that overlap (or one copy inside another), and some
+  // carry small inside-out scraps. A printer treats overlaps as solid, so merge the shells
+  // into one solid and work from that outer surface only.
+  let merged = 0;
+  {
+    const shells = model.decompose();
+    const solid = shells.filter((m) => m.volume() > 1e-9);
+    const dropped = shells.length - solid.length;
+    if (!solid.length) throw new Error('This STL has no solid volume (its faces may point inward). Repair it and try again.');
+    if (shells.length > 1) {
+      await progress(`Merging ${solid.length} overlapping shells…`);
+      model = keep(solid.length === 1 ? solid[0].translate([0, 0, 0]) : wasm.Manifold.union(solid));
+      positions = manifoldToTriangles(model);
+      merged = solid.length > 1 ? solid.length : 0;
+      if (dropped) merged = Math.max(merged, 1);
+    }
+    for (const m of shells) m.delete();
+  }
   const bb = model.boundingBox();
   const size = [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]];
   if (bb.min[2] >= -1e-6 || bb.max[2] <= 1e-6) throw new Error('The cut plane doesn\'t pass through the model.');
 
-  // Grid spacing: from the resolution setting, but never coarser than a third of the wall.
+  // Grid spacing comes from the detail setting. Walls stay accurate even when they're thinner
+  // than a grid cell, because distances near the wall are measured exactly. The voxel cap keeps
+  // memory within what a browser tab can handle.
   let h = Math.max(...size) / (opts.resolution || 140);
-  h = Math.min(h, wall / 3);
-  // keep memory sane (~ 12M voxels max)
   const vox = (hh) => (size[0] / hh + 8) * (size[1] / hh + 8) * (size[2] / hh + 8);
-  while (vox(h) > 12e6) h *= 1.1;
+  while (vox(h) > (opts.maxVoxels || 6e6)) h *= 1.05;
   const pad = 3;
   const ox = bb.min[0] - pad * h, oy = bb.min[1] - pad * h, oz = bb.min[2] - pad * h;
   const nx = Math.ceil(size[0] / h) + 2 * pad, ny = Math.ceil(size[1] / h) + 2 * pad, nz = Math.ceil(size[2] / h) + 2 * pad;
@@ -158,10 +197,14 @@ export async function makeContainerAndLid(deps, positions, opts) {
   await progress(`Measuring wall space (${nx}×${ny}×${nz} grid)…`);
   const inside = voxelizeInside(positions, ox, oy, oz, h, nx, ny, nz);
   const N = nx * ny * nz;
+  // Rough distances: from each cell to the nearest cell that is outside or that the surface
+  // passes through. Marking surface cells matters for folds and slots thinner than a cell,
+  // whose outside space would otherwise be missed by every cell centre.
+  const touched = markSurfaceCells(positions, ox, oy, oz, h, nx, ny, nz);
   const field = new Float64Array(N);
-  for (let i = 0; i < N; i++) field[i] = inside[i] ? 1e20 : 0;
+  for (let i = 0; i < N; i++) field[i] = inside[i] && !touched[i] ? 1e20 : 0;
   edt3d(field, nx, ny, nz);
-  for (let i = 0; i < N; i++) field[i] = inside[i] ? Math.sqrt(field[i]) * h - 0.5 * h : -h;
+  for (let i = 0; i < N; i++) field[i] = inside[i] ? Math.sqrt(field[i]) * h : -h;
 
   // Refine distances near the wall-thickness level with exact distances to the surface.
   await progress('Refining wall distances…');
@@ -170,16 +213,27 @@ export async function makeContainerAndLid(deps, positions, opts) {
   const bvh = new MeshBVH(geom);
   const p = new Vector3();
   const target = { point: new Vector3(), distance: 0, faceIndex: 0 };
-  const band = 2.5 * h;
+  const band = 2 * h; // rough distances are within about 1.7 cells of the truth
   let refined = 0;
   for (let k = 0; k < nz; k++) {
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
       const idx = (k * ny + j) * nx + i;
-      if (!inside[idx]) continue;
-      if (Math.abs(field[idx] - wall) > band) continue;
+      let sign = 1;
+      if (inside[idx]) {
+        if (Math.abs(field[idx] - wall) > band) continue;
+      } else {
+        // Outside cells only matter when the wall is thinner than the band: then the cells
+        // just outside the surface need true (negative) distances too.
+        if (wall > band) continue;
+        const nb = (i > 0 && inside[idx - 1]) || (i < nx - 1 && inside[idx + 1]) ||
+          (j > 0 && inside[idx - nx]) || (j < ny - 1 && inside[idx + nx]) ||
+          (k > 0 && inside[idx - nx * ny]) || (k < nz - 1 && inside[idx + nx * ny]);
+        if (!nb) continue;
+        sign = -1;
+      }
       p.set(ox + (i + 0.5) * h, oy + (j + 0.5) * h, oz + (k + 0.5) * h);
       const r = bvh.closestPointToPoint(p, target);
-      if (r) { field[idx] = r.distance; refined++; }
+      if (r) { field[idx] = sign * r.distance; refined++; }
     }
     if (k % 16 === 0) await progress(`Refining wall distances… ${Math.round(100 * k / nz)}%`);
   }
@@ -202,7 +256,7 @@ export async function makeContainerAndLid(deps, positions, opts) {
   const lb = { min: [ox, oy, oz], max: [ox + nx * h, oy + ny * h, Math.min(oz + nz * h, 2 * h)] };
   // The surface is simplified afterwards; pad the level by the same tolerance so walls never get thinner.
   const tol = Math.min(0.05, 0.15 * h);
-  const dense = keep(wasm.Manifold.levelSet(([x, y, z]) => sample(x, y, z), lb, h, wall + tol));
+  const dense = keep(wasm.Manifold.levelSet(([x, y, z]) => sample(x, y, z), lb, h, wall + tol + (opts.margin ?? (wall < h ? 0.65 : 0.5)) * h));
   const rawCavity = keep(dense.simplify(tol));
   const capped = keep(rawCavity.trimByPlane([0, 0, -1], -h)); // keep z <= h
 
@@ -257,7 +311,7 @@ export async function makeContainerAndLid(deps, positions, opts) {
   const result = {
     container, lid,
     info: {
-      gridSpacing: h, refined, plugDepth: plugInfo.depth,
+      gridSpacing: h, refined, mergedShells: merged, plugDepth: plugInfo.depth,
       cavityVolume: cavity.volume(), modelVolume: model.volume(),
       containerVolume: container.volume(), lidVolume: lid.volume(),
     },

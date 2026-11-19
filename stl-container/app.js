@@ -22,7 +22,6 @@ function getWasm() {
   }
   return wasmPromise;
 }
-getWasm().catch(() => {});
 
 // ---------- Viewer ----------
 const canvas = $('view');
@@ -309,9 +308,8 @@ $('make').addEventListener('click', async () => {
   $('make').disabled = true;
   setStatus('');
   try {
-    setBusy('Loading the geometry engine…');
+    setBusy('Starting…');
     await nextFrame();
-    const wasm = await getWasm();
 
     const { n, d } = cutPlane();
     // Cut frame: the plane becomes z = 0, lid above, container below.
@@ -329,16 +327,10 @@ $('make').addEventListener('click', async () => {
     }
 
     const t0 = performance.now();
-    const r = await makeContainerAndLid(
-      { wasm, BufferGeometry: THREE.BufferGeometry, BufferAttribute: THREE.BufferAttribute, Vector3: THREE.Vector3, MeshBVH },
-      pos,
-      {
-        wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res,
-        onProgress: async (m) => { setBusy(m); await nextFrame(); },
-      });
-    const container = manifoldToTriangles(r.container);
-    const lid = manifoldToTriangles(r.lid);
-    r.container.delete(); r.lid.delete();
+    const opts = { wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res };
+    let r = await runInWorker(pos, opts);
+    if (!r) r = await runOnPage(pos, opts);
+    const { container, lid } = r;
 
     state.result = { container, lid, M, Minv, info: r.info, seconds: (performance.now() - t0) / 1000 };
     buildResultMeshes();
@@ -350,7 +342,10 @@ $('make').addEventListener('click', async () => {
         ? `The hollow is shallow here, so the plug was shortened to ${r.info.plugDepth.toFixed(1)} mm.`
         : 'The hollow is too shallow for a plug, so the lid is flat.';
     }
-    setStatus(msg);
+    if (r.info.mergedShells) {
+      msg = 'This STL was made of several overlapping pieces; they were merged into one solid first. ' + msg;
+    }
+    setStatus(msg.trim());
   } catch (err) {
     console.error(err);
     setStatus(err && err.message ? err.message : String(err), true);
@@ -360,6 +355,56 @@ $('make').addEventListener('click', async () => {
     $('make').disabled = false;
   }
 });
+
+// The work runs in a background worker so the page doesn't freeze. If the worker can't
+// start (for example a host that blocks it), it runs on the page instead.
+let worker = null, workerReady = null;
+function startWorker() {
+  if (workerReady) return workerReady;
+  workerReady = new Promise((resolve) => {
+    let w;
+    try { w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' }); } catch (e) { resolve(null); return; }
+    const timer = setTimeout(() => { w.terminate(); resolve(null); }, 30000);
+    w.onmessage = (e) => { if (e.data.type === 'ready') { clearTimeout(timer); resolve(w); } };
+    w.onerror = (e) => { e.preventDefault(); clearTimeout(timer); w.terminate(); resolve(null); };
+  });
+  return workerReady.then((w) => (worker = w));
+}
+startWorker();
+
+async function runInWorker(positions, opts) {
+  const w = await startWorker();
+  if (!w) return null;
+  return new Promise((resolve, reject) => {
+    w.onmessage = (e) => {
+      const d = e.data;
+      if (d.type === 'progress') setBusy(d.message);
+      else if (d.type === 'done') resolve({ container: d.container, lid: d.lid, info: d.info });
+      else if (d.type === 'error') reject(new Error(d.message));
+    };
+    w.onerror = (e) => {
+      e.preventDefault();
+      // The worker died (usually out of memory). Start a fresh one next time.
+      w.terminate(); workerReady = null; worker = null;
+      reject(new Error('The browser ran out of memory. Try the Draft detail setting, or a smaller model.'));
+    };
+    w.postMessage({ type: 'run', positions, opts }, [positions.buffer]);
+  });
+}
+
+async function runOnPage(positions, opts) {
+  setBusy('Loading the geometry engine…');
+  await nextFrame();
+  const wasm = await getWasm();
+  const r = await makeContainerAndLid(
+    { wasm, BufferGeometry: THREE.BufferGeometry, BufferAttribute: THREE.BufferAttribute, Vector3: THREE.Vector3, MeshBVH },
+    positions,
+    { ...opts, onProgress: async (m) => { setBusy(m); await nextFrame(); } });
+  const container = manifoldToTriangles(r.container);
+  const lid = manifoldToTriangles(r.lid);
+  r.container.delete(); r.lid.delete();
+  return { container, lid, info: r.info };
+}
 
 function geomFrom(tri) {
   const g = new THREE.BufferGeometry();
