@@ -1,5 +1,10 @@
 # MikeyTime Ring Studio changelog
 
+## v1.6.0
+
+### New
+- **Drag to resize the preview, like the STL Container Maker.** Side by side (a phone turned sideways, or a computer), drag the handle between the preview and the settings to give either more room. On a phone held upright (and tablets), drag the bar under the preview to make it taller or shorter. Each layout remembers its own position; double-tap a handle to go back to automatic. Handles also respond to the arrow keys, and Home resets. Both sides keep a usable minimum size.
+
 ## v1.5.2
 
 ### Improved

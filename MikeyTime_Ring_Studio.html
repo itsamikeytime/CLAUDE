@@ -75,14 +75,14 @@
      phone turned sideways) go side by side too. */
   .app-shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100svh; }
   .app-preview { position: sticky; top: 0; z-index: 20; }
-  .app-stage { position: relative; height: clamp(190px, 33svh, 340px); }
+  .app-stage { position: relative; height: var(--stage-h, clamp(190px, 33svh, 340px)); }
   .app-settings { container: panel / inline-size; }
   @media (min-width: 600px) {
-    .app-stage { height: clamp(220px, 38svh, 420px); }
+    .app-stage { height: var(--stage-h, clamp(220px, 38svh, 420px)); }
   }
   @media (min-width: 900px) {
     .app-shell {
-      display: grid; grid-template-columns: clamp(380px, 36vw, 500px) minmax(0, 1fr);
+      display: grid; grid-template-columns: var(--split-x, clamp(380px, 36vw, 500px)) minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden;
     }
     /* Side by side, the frame is fixed to the screen like the Container
@@ -104,7 +104,7 @@
   }
   @media (orientation: landscape) and (max-height: 480px) and (min-width: 560px) {
     .app-shell {
-      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      display: grid; grid-template-columns: var(--split-x, minmax(0, 1fr)) minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden;
     }
     /* Side by side, the frame is fixed to the screen like the Container
@@ -124,6 +124,31 @@
     .app-preview-inner { height: 100%; }
     .app-stage { flex: 1 1 auto; height: auto; min-height: 0; }
   }
+  /* Drag handles between the preview and the settings (like the STL
+     Container Maker's divider). Side by side: a vertical bar on the column
+     edge. Stacked: a bar under the pinned preview that sets its height. */
+  .split-v { display: none; }
+  .split-h {
+    display: flex; justify-content: center; align-items: center; height: 18px; margin: 2px 0 -6px;
+    cursor: row-resize; touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  .split-v::after, .split-h::after { content: ""; border-radius: 2px; background: #8b929c; opacity: 0.55; }
+  .split-h::after { width: 44px; height: 4px; }
+  .split-v::after { position: absolute; left: 50%; top: 50%; width: 4px; height: 44px; margin: -22px 0 0 -2px; }
+  .split-v.on::after, .split-h.on::after, .split-v:focus-visible::after, .split-h:focus-visible::after { background: #0d7355; opacity: 1; }
+  .split-v:focus-visible, .split-h:focus-visible { outline: none; }
+  @media (min-width: 900px), (orientation: landscape) and (max-height: 480px) and (min-width: 560px) {
+    .split-h { display: none; }
+    .split-v {
+      display: block; grid-row: 2; grid-column: 1; justify-self: end; align-self: stretch;
+      position: relative; z-index: 30; width: 16px; margin-right: -8px;
+      cursor: col-resize; touch-action: none; -webkit-user-select: none; user-select: none;
+    }
+  }
+  @media (orientation: landscape) and (max-height: 480px) and (min-width: 560px) {
+    .split-v { width: 24px; margin-right: -12px; }
+  }
+
   /* A phone turned sideways keeps the compact phone controls (Files menu,
      undo beside the preview, camera buttons on the 3D view) so the header
      and toolbar stay on one row. */
@@ -264,7 +289,7 @@ const Redo2 = (p) => <IconBase {...p}><path d="m15 14 5-5-5-5"/><path d="M20 9H9
 const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6"/></IconBase>;
 const ChevronUp = (p) => <IconBase {...p}><path d="m18 15-6-6-6 6"/></IconBase>;
 
-const APP_VERSION = '1.5.2';
+const APP_VERSION = '1.6.0';
 // Compares dotted versions part by part (so 1.10 is newer than 1.3).
 const compareVersions = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -3205,6 +3230,95 @@ function App() {
   // Which preview pop-up is open: 'display', 'print' or null.
   const [openPanel, setOpenPanel] = useState(null);
   const togglePanel = (id) => setOpenPanel(prev => (prev === id ? null : id));
+
+  // ---- Draggable split between the preview and the settings -------------
+  // Which arrangement is showing: 'landscape' (phone sideways: preview left),
+  // 'desktop' (settings left) or 'stacked' (preview pinned on top). Each keeps
+  // its own dragged position; double-tapping a handle goes back to automatic.
+  const isLandscapeSplit = useMediaQuery('(orientation: landscape) and (max-height: 480px) and (min-width: 560px)');
+  const isDesktopSplit = useMediaQuery('(min-width: 900px)');
+  const splitLayout = isLandscapeSplit ? 'landscape' : isDesktopSplit ? 'desktop' : 'stacked';
+  const readSplit = (key) => { try { const v = parseFloat(localStorage.getItem(`ringstudio:split-${key}`)); return Number.isFinite(v) ? v : null; } catch (e) { return null; } };
+  const [splitFracs, setSplitFracs] = useState(() => ({ landscape: readSplit('landscape'), desktop: readSplit('desktop'), stacked: readSplit('stacked') }));
+  const saveSplit = (key, v) => { try { if (v === null) localStorage.removeItem(`ringstudio:split-${key}`); else localStorage.setItem(`ringstudio:split-${key}`, String(v)); } catch (e) {} };
+  const shellRef = useRef(null);
+  const splitDragRef = useRef(null);
+  const [splitDragging, setSplitDragging] = useState(false);
+  // Limits keep both sides usable: in px for the columns, as a share of the
+  // screen height for the stacked preview.
+  const clampSplit = (layout, v) => {
+    if (layout === 'stacked') return Math.min(0.68, Math.max(0.2, v));
+    const w = shellRef.current ? shellRef.current.getBoundingClientRect().width : window.innerWidth;
+    const minA = layout === 'desktop' ? 320 : 240;
+    const minB = layout === 'desktop' ? 380 : 240;
+    return Math.min(1 - minB / w, Math.max(minA / w, v));
+  };
+  const splitValueFromPointer = (layout, e) => {
+    if (layout === 'stacked') {
+      const d = splitDragRef.current;
+      return (d.startH + (e.clientY - d.startY)) / window.innerHeight;
+    }
+    const r = shellRef.current.getBoundingClientRect();
+    return (e.clientX - r.left) / r.width;
+  };
+  const onSplitPointerDown = (e) => {
+    const layout = splitLayout;
+    const stageH = stageRef.current ? stageRef.current.getBoundingClientRect().height : 0;
+    splitDragRef.current = { layout, startY: e.clientY, startH: stageH, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setSplitDragging(true);
+    e.preventDefault();
+  };
+  const onSplitPointerMove = (e) => {
+    const d = splitDragRef.current;
+    if (!d) return;
+    d.moved = true;
+    const v = clampSplit(d.layout, splitValueFromPointer(d.layout, e));
+    setSplitFracs(prev => ({ ...prev, [d.layout]: v }));
+  };
+  const onSplitPointerUp = () => {
+    const d = splitDragRef.current;
+    splitDragRef.current = null;
+    setSplitDragging(false);
+    if (d && d.moved) setSplitFracs(prev => { saveSplit(d.layout, prev[d.layout]); return prev; });
+  };
+  const resetSplit = () => {
+    saveSplit(splitLayout, null);
+    setSplitFracs(prev => ({ ...prev, [splitLayout]: null }));
+  };
+  const onSplitKey = (e) => {
+    const step = e.shiftKey ? 0.1 : 0.03;
+    const vertical = splitLayout === 'stacked';
+    const dir = (vertical ? { ArrowUp: -1, ArrowDown: 1 } : { ArrowLeft: -1, ArrowRight: 1 })[e.key];
+    if (e.key === 'Home' || e.key === 'Escape') { e.preventDefault(); resetSplit(); return; }
+    if (!dir) return;
+    e.preventDefault();
+    let cur = splitFracs[splitLayout];
+    if (cur === null || cur === undefined) {
+      cur = vertical
+        ? (stageRef.current ? stageRef.current.getBoundingClientRect().height / window.innerHeight : 0.33)
+        : (shellRef.current ? (() => { const sr = shellRef.current.getBoundingClientRect(); const pr = document.querySelector(splitLayout === 'desktop' ? '.app-settings' : '.app-preview').getBoundingClientRect(); return pr.width / sr.width; })() : 0.5);
+    }
+    const v = clampSplit(splitLayout, cur + dir * step);
+    saveSplit(splitLayout, v);
+    setSplitFracs(prev => ({ ...prev, [splitLayout]: v }));
+  };
+  const splitStyle = {};
+  if (splitLayout !== 'stacked' && splitFracs[splitLayout] !== null && splitFracs[splitLayout] !== undefined) {
+    splitStyle['--split-x'] = `${(clampSplit(splitLayout, splitFracs[splitLayout]) * 100).toFixed(2)}%`;
+  }
+  if (splitLayout === 'stacked' && splitFracs.stacked !== null && splitFracs.stacked !== undefined) {
+    splitStyle['--stage-h'] = `${Math.round(clampSplit('stacked', splitFracs.stacked) * window.innerHeight)}px`;
+  }
+  const splitHandleProps = {
+    tabIndex: 0,
+    onPointerDown: onSplitPointerDown,
+    onPointerMove: onSplitPointerMove,
+    onPointerUp: onSplitPointerUp,
+    onPointerCancel: onSplitPointerUp,
+    onDoubleClick: resetSplit,
+    onKeyDown: onSplitKey
+  };
   const panelBarRef = useRef(null);
   // The preview box's shape (height ÷ width), so the blueprint fills it.
   const stageRef = useRef(null);
@@ -3920,7 +4034,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell bg-gray-100 font-sans">
+    <div ref={shellRef} className={`app-shell bg-gray-100 font-sans${splitDragging ? ' select-none' : ''}`} style={splitStyle}>
 
       {/* Phones: the page scrolls and the preview stays pinned at the top.
           Larger screens: header and preview are fixed and the settings scroll. */}
@@ -4786,8 +4900,25 @@ function App() {
               </div>
             )}
           </div>
+          <div
+            className={`split-h${splitDragging ? ' on' : ''}`}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize the preview. Drag, or use the up and down arrow keys; double-tap to reset."
+            title="Drag to resize the preview; double-tap to reset"
+            {...splitHandleProps}
+          />
         </section>
       </div>
+
+      <div
+        className={`split-v${splitDragging ? ' on' : ''}`}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the preview and settings. Drag, or use the left and right arrow keys; double-tap to reset."
+        title="Drag to resize; double-tap to reset"
+        {...splitHandleProps}
+      />
 
       <div className="app-settings flex-1 p-3 sm:p-5 scroll-smooth">
         <div className="max-w-7xl mx-auto space-y-6">
