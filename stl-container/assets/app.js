@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import Module from 'manifold-3d';
-import { makeContainerAndLid, manifoldToTriangles, trianglesToSTL } from './core.js';
+import { makeContainerAndLid, manifoldToTriangles, trianglesToSTL } from './core.js?v=20261119-2';
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -411,7 +411,7 @@ function startWorker() {
   if (workerReady) return workerReady;
   workerReady = new Promise((resolve) => {
     let w;
-    try { w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' }); } catch (e) { resolve(null); return; }
+    try { w = new Worker(new URL('./worker.js?v=20261119-2', import.meta.url), { type: 'module' }); } catch (e) { resolve(null); return; }
     const timer = setTimeout(() => { w.terminate(); resolve(null); }, 30000);
     w.onmessage = (e) => { if (e.data.type === 'ready') { clearTimeout(timer); resolve(w); } };
     w.onerror = (e) => { e.preventDefault(); clearTimeout(timer); w.terminate(); resolve(null); };

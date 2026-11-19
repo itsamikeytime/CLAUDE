@@ -52,6 +52,8 @@ assets/manifold.wasm geometry engine (a local copy, so it doesn't depend on the 
 
 three.js, three-mesh-bvh and the manifold-3d loader still come from jsDelivr. It's set up for https://container.michaelkiaunis.com/; if it moves, update the `og:image` and `og:url` lines in `index.html`.
 
+File references carry a version tag (`?v=…` in `index.html`, `assets/app.js` and `assets/worker.js`). Change it on every release so caches such as Cloudflare's fetch the new scripts instead of serving old ones next to a new `index.html`.
+
 It has to be served over HTTP(S), not opened as a local `file://`, because it uses ES modules and a worker. To try it locally:
 
 ```bash
