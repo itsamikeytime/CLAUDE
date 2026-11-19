@@ -1,0 +1,445 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { MeshBVH } from 'three-mesh-bvh';
+import Module from 'manifold-3d';
+import { makeContainerAndLid, manifoldToTriangles, trianglesToSTL } from './core.js';
+
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// ---------- Geometry engine (loads in the background) ----------
+let wasmPromise = null;
+function getWasm() {
+  if (!wasmPromise) {
+    wasmPromise = Module().then((w) => { w.setup(); return w; });
+  }
+  return wasmPromise;
+}
+getWasm().catch(() => {});
+
+// ---------- Viewer ----------
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.localClippingEnabled = true;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 10000);
+camera.up.set(0, 0, 1); // STL files are usually Z-up
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8a8a, 1.6));
+const key = new THREE.DirectionalLight(0xffffff, 1.6);
+scene.add(key);
+scene.add(camera);
+camera.add(key);
+key.position.set(1, 2, 3);
+
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+resize();
+
+function applyTheme() {
+  scene.background = new THREE.Color(css('--viewer') || '#e9e7e1');
+  containerMat.color.set(css('--container') || '#2a8c96');
+  lidMat.color.set(css('--lid') || '#e08a3c');
+  resContainerMat.color.set(css('--container') || '#2a8c96');
+  resLidMat.color.set(css('--lid') || '#e08a3c');
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+
+(function loop() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+})();
+
+// ---------- State ----------
+const state = {
+  positions: null,       // Float32Array triangle soup, centred on the origin
+  radius: 1,
+  axis: 'z',
+  frac: 0.65,
+  tiltA: 0, tiltB: 0,
+  swapped: false,
+  wall: 2, plug: 5, clearance: 0.2, res: 140,
+  result: null,          // { container: Float32Array, lid: Float32Array, M, Minv, info }
+  busy: false,
+};
+
+// Materials: the model is drawn twice, each copy clipped to one side of the plane.
+const lidPlane = new THREE.Plane();
+const containerPlane = new THREE.Plane();
+const containerMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide, clippingPlanes: [containerPlane] });
+const lidMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide, clippingPlanes: [lidPlane] });
+const resContainerMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
+const resLidMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
+
+const modelGroup = new THREE.Group();
+scene.add(modelGroup);
+let modelGeom = null;
+
+const planeMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+const planeEdge = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1)),
+  new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.5 }));
+planeMesh.add(planeEdge);
+planeMesh.visible = false;
+scene.add(planeMesh);
+
+const resultGroup = new THREE.Group();
+resultGroup.matrixAutoUpdate = false;
+scene.add(resultGroup);
+const resContainer = new THREE.Mesh(new THREE.BufferGeometry(), resContainerMat);
+const resLid = new THREE.Mesh(new THREE.BufferGeometry(), resLidMat);
+resultGroup.add(resContainer, resLid);
+resultGroup.visible = false;
+
+applyTheme();
+
+// ---------- Plane math ----------
+const AXES = {
+  x: { n: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1] },
+  y: { n: [0, 1, 0], u: [0, 0, 1], v: [1, 0, 0] },
+  z: { n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] },
+};
+function planeNormal() {
+  const a = AXES[state.axis];
+  const n = new THREE.Vector3(...a.n);
+  n.applyAxisAngle(new THREE.Vector3(...a.u), THREE.MathUtils.degToRad(state.tiltA));
+  n.applyAxisAngle(new THREE.Vector3(...a.v), THREE.MathUtils.degToRad(state.tiltB));
+  return n.normalize();
+}
+function extentAlong(n) {
+  const p = state.positions;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < p.length; i += 3) {
+    const d = p[i] * n.x + p[i + 1] * n.y + p[i + 2] * n.z;
+    if (d < lo) lo = d;
+    if (d > hi) hi = d;
+  }
+  return [lo, hi];
+}
+// The plane as used for the cut: lid on the +normal side, container on the −normal side.
+function cutPlane() {
+  const n = planeNormal();
+  const [lo, hi] = extentAlong(n);
+  let d = lo + state.frac * (hi - lo);
+  const out = { n, d, lo, hi };
+  if (state.swapped) { out.n = n.clone().negate(); out.d = -d; }
+  return out;
+}
+
+function updatePlaneView() {
+  if (!state.positions) return;
+  const { n, d, lo, hi } = cutPlane();
+  lidPlane.set(n.clone(), -d);
+  containerPlane.set(n.clone().negate(), d);
+  const size = state.radius * 2.6;
+  planeMesh.scale.set(size, size, 1);
+  planeMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+  planeMesh.position.copy(n).multiplyScalar(d);
+  $('posNum').value = (state.frac * (hi - lo)).toFixed(1);
+  $('posNum').max = (hi - lo).toFixed(1);
+}
+
+// ---------- Loading ----------
+const loader = new STLLoader();
+function setModel(geometry, name) {
+  let g = geometry.index ? geometry.toNonIndexed() : geometry;
+  g.deleteAttribute('normal');
+  g.computeBoundingBox();
+  const c = new THREE.Vector3();
+  g.boundingBox.getCenter(c);
+  g.translate(-c.x, -c.y, -c.z);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  const s = new THREE.Vector3();
+  g.boundingBox.getSize(s);
+
+  state.positions = new Float32Array(g.attributes.position.array);
+  state.radius = g.boundingSphere.radius;
+  state.name = name.replace(/\.stl$/i, '');
+  clearResult();
+
+  if (modelGeom) modelGeom.dispose();
+  modelGeom = g;
+  modelGroup.clear();
+  modelGroup.add(new THREE.Mesh(g, containerMat), new THREE.Mesh(g, lidMat));
+  planeMesh.visible = true;
+
+  const tris = state.positions.length / 9;
+  $('fileInfo').textContent = `${name} · ${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)} mm · ${tris.toLocaleString()} triangles`;
+  $('empty').classList.add('hidden');
+  $('planeSec').classList.remove('hidden');
+  $('settingsSec').classList.remove('hidden');
+  setStatus('');
+  updatePlaneView();
+  fitView();
+}
+
+function fitView(margin = 1.15) {
+  const r = state.radius || 50;
+  const dist = r / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * margin;
+  camera.position.set(dist * 0.62, -dist * 0.62, dist * 0.48);
+  camera.near = r / 100; camera.far = r * 100;
+  camera.updateProjectionMatrix();
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+
+function readFile(file) {
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const g = loader.parse(fr.result);
+      if (!g.attributes.position || g.attributes.position.count < 12) throw new Error('empty');
+      setModel(g, file.name);
+    } catch (e) {
+      setStatus('That file couldn\'t be read as an STL.', true);
+      $('settingsSec').classList.remove('hidden');
+    }
+  };
+  fr.readAsArrayBuffer(file);
+}
+
+const drop = $('drop');
+drop.addEventListener('click', () => $('file').click());
+drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+$('file').addEventListener('change', (e) => readFile(e.target.files[0]));
+for (const t of [drop, canvas]) {
+  t.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  t.addEventListener('dragleave', () => drop.classList.remove('over'));
+  t.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); readFile(e.dataTransfer.files[0]); });
+}
+$('sample').addEventListener('click', (e) => {
+  e.preventDefault();
+  // An egg-like pebble, 50 mm tall.
+  const g = new THREE.SphereGeometry(20, 96, 48);
+  g.rotateX(Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const z = p.getZ(i);
+    const k = 1 - 0.18 * (z / 20);
+    p.setXYZ(i, p.getX(i) * k * 1.1, p.getY(i) * k * 0.85, z * 1.25);
+  }
+  setModel(g, 'sample-pebble.stl');
+});
+
+// ---------- Controls ----------
+function bindPair(rangeId, numId, keyName, onChange) {
+  const r = $(rangeId), n = $(numId);
+  r.addEventListener('input', () => { n.value = r.value; state[keyName] = +r.value; onChange(); });
+  n.addEventListener('change', () => {
+    const v = Math.max(+n.min || -Infinity, +n.value || 0);
+    n.value = v;
+    if (v > +r.max) r.max = v;
+    r.value = v; state[keyName] = v; onChange();
+  });
+}
+function planeChanged() { clearResult(); updatePlaneView(); }
+function settingsChanged() { if (state.result) clearResult(); }
+
+bindPair('tiltA', 'tiltANum', 'tiltA', planeChanged);
+bindPair('tiltB', 'tiltBNum', 'tiltB', planeChanged);
+bindPair('wall', 'wallNum', 'wall', settingsChanged);
+bindPair('plug', 'plugNum', 'plug', settingsChanged);
+bindPair('clear', 'clearNum', 'clearance', settingsChanged);
+
+$('pos').addEventListener('input', () => { state.frac = $('pos').value / 1000; planeChanged(); });
+$('posNum').addEventListener('change', () => {
+  const n = planeNormal();
+  const [lo, hi] = extentAlong(n);
+  const mm = Math.min(hi - lo, Math.max(0, +$('posNum').value || 0));
+  state.frac = (hi - lo) > 0 ? mm / (hi - lo) : 0.5;
+  $('pos').value = Math.round(state.frac * 1000);
+  planeChanged();
+});
+
+for (const b of $('axis').querySelectorAll('button')) {
+  b.addEventListener('click', () => {
+    state.axis = b.dataset.axis;
+    for (const o of $('axis').querySelectorAll('button')) o.setAttribute('aria-pressed', String(o === b));
+    planeChanged();
+  });
+}
+for (const b of $('detail').querySelectorAll('button')) {
+  b.addEventListener('click', () => {
+    state.res = +b.dataset.res;
+    for (const o of $('detail').querySelectorAll('button')) o.setAttribute('aria-pressed', String(o === b));
+    settingsChanged();
+  });
+}
+$('swap').addEventListener('click', () => { state.swapped = !state.swapped; planeChanged(); });
+$('resetView').addEventListener('click', () => fitView(resultGroup.visible ? 1.5 : 1.15));
+$('backToCut').addEventListener('click', () => { showResult(false); });
+$('explode').addEventListener('input', applyExplode);
+
+// ---------- Make ----------
+function setStatus(msg, isError = false) {
+  const s = $('status');
+  s.textContent = msg;
+  s.classList.toggle('error', isError);
+}
+function setBusy(msg) {
+  const b = $('busy');
+  b.textContent = msg || '';
+  b.classList.toggle('on', !!msg);
+}
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
+$('make').addEventListener('click', async () => {
+  if (!state.positions || state.busy) return;
+  state.busy = true;
+  $('make').disabled = true;
+  setStatus('');
+  try {
+    setBusy('Loading the geometry engine…');
+    await nextFrame();
+    const wasm = await getWasm();
+
+    const { n, d } = cutPlane();
+    // Cut frame: the plane becomes z = 0, lid above, container below.
+    const R = new THREE.Matrix4().makeRotationFromQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(n, new THREE.Vector3(0, 0, 1)));
+    const M = R.multiply(new THREE.Matrix4().makeTranslation(-n.x * d, -n.y * d, -n.z * d));
+    const Minv = M.clone().invert();
+    const pos = new Float32Array(state.positions);
+    const e = M.elements;
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+      pos[i] = e[0] * x + e[4] * y + e[8] * z + e[12];
+      pos[i + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+      pos[i + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+    }
+
+    const t0 = performance.now();
+    const r = await makeContainerAndLid(
+      { wasm, BufferGeometry: THREE.BufferGeometry, BufferAttribute: THREE.BufferAttribute, Vector3: THREE.Vector3, MeshBVH },
+      pos,
+      {
+        wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res,
+        onProgress: async (m) => { setBusy(m); await nextFrame(); },
+      });
+    const container = manifoldToTriangles(r.container);
+    const lid = manifoldToTriangles(r.lid);
+    r.container.delete(); r.lid.delete();
+
+    state.result = { container, lid, M, Minv, info: r.info, seconds: (performance.now() - t0) / 1000 };
+    buildResultMeshes();
+    showResult(true);
+    fitView(1.5);
+    let msg = '';
+    if (state.plug > 0 && r.info.plugDepth < state.plug - 0.01) {
+      msg = r.info.plugDepth > 0
+        ? `The hollow is shallow here, so the plug was shortened to ${r.info.plugDepth.toFixed(1)} mm.`
+        : 'The hollow is too shallow for a plug, so the lid is flat.';
+    }
+    setStatus(msg);
+  } catch (err) {
+    console.error(err);
+    setStatus(err && err.message ? err.message : String(err), true);
+  } finally {
+    setBusy('');
+    state.busy = false;
+    $('make').disabled = false;
+  }
+});
+
+function geomFrom(tri) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(tri, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function buildResultMeshes() {
+  const r = state.result;
+  resContainer.geometry.dispose();
+  resLid.geometry.dispose();
+  resContainer.geometry = geomFrom(r.container);
+  resLid.geometry = geomFrom(r.lid);
+  resultGroup.matrix.copy(r.Minv);
+  resultGroup.matrixWorldNeedsUpdate = true;
+  applyExplode();
+
+  const i = r.info;
+  const ml = (v) => (v / 1000).toFixed(1) + ' cm³';
+  $('stats').innerHTML =
+    `<span>Hollow inside</span><b>${ml(i.cavityVolume)}</b>` +
+    `<span>Container material</span><b>${ml(i.containerVolume)}</b>` +
+    `<span>Lid material</span><b>${ml(i.lidVolume)}</b>` +
+    `<span>Plug depth</span><b>${i.plugDepth.toFixed(1)} mm</b>` +
+    `<span>Accuracy</span><b>${i.gridSpacing.toFixed(2)} mm grid · ${r.seconds.toFixed(1)} s</b>`;
+}
+
+function applyExplode() {
+  const gap = ($('explode').value / 100) * state.radius * 1.2;
+  resContainer.position.set(0, 0, -gap / 2);
+  resLid.position.set(0, 0, gap / 2);
+}
+
+function showResult(on) {
+  resultGroup.visible = on && !!state.result;
+  modelGroup.visible = !resultGroup.visible;
+  planeMesh.visible = !resultGroup.visible && !!state.positions;
+  $('resultSec').classList.toggle('hidden', !resultGroup.visible);
+  if (on && state.result) $('resultSec').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearResult() {
+  if (!state.result) return;
+  state.result = null;
+  showResult(false);
+}
+
+// ---------- Download ----------
+function exportTriangles(which) {
+  const r = state.result;
+  const src = r[which];
+  const out = new Float32Array(src.length);
+  if ($('printOrient').checked) {
+    // Container: opening already faces up (+z). Lid: flip so the plug points up.
+    const flip = which === 'lid';
+    let minZ = Infinity;
+    for (let i = 0; i < src.length; i += 3) {
+      out[i] = src[i];
+      out[i + 1] = flip ? -src[i + 1] : src[i + 1];
+      out[i + 2] = flip ? -src[i + 2] : src[i + 2];
+      if (out[i + 2] < minZ) minZ = out[i + 2];
+    }
+    for (let i = 2; i < out.length; i += 3) out[i] -= minZ;
+  } else {
+    const e = r.Minv.elements;
+    for (let i = 0; i < src.length; i += 3) {
+      const x = src[i], y = src[i + 1], z = src[i + 2];
+      out[i] = e[0] * x + e[4] * y + e[8] * z + e[12];
+      out[i + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+      out[i + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+    }
+  }
+  return out;
+}
+function download(which) {
+  if (!state.result) return;
+  const name = `${state.name || 'model'}-${which}`;
+  const blob = new Blob([trianglesToSTL(exportTriangles(which), name)], { type: 'model/stl' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name + '.stl';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$('dlContainer').addEventListener('click', () => download('container'));
+$('dlLid').addEventListener('click', () => download('lid'));

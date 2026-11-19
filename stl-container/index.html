@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STL Container Maker</title>
+<meta name="description" content="Upload an STL, pick a cut plane, and turn it into a hollow container with a matching lid.">
+<style>
+  :root {
+    --bg: #f4f3ef;
+    --panel: #ffffff;
+    --ink: #1d1f23;
+    --muted: #63666d;
+    --line: #dddad2;
+    --accent: #1f6f78;
+    --accent-ink: #ffffff;
+    --container: #2a8c96;
+    --lid: #e08a3c;
+    --danger: #b3261e;
+    --viewer: #e9e7e1;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181b; --panel: #1f2226; --ink: #eceae4; --muted: #a2a59f; --line: #34383e;
+      --accent: #4fb3bd; --accent-ink: #0d1517; --viewer: #24272c; --danger: #f2827a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181b; --panel: #1f2226; --ink: #eceae4; --muted: #a2a59f; --line: #34383e;
+    --accent: #4fb3bd; --accent-ink: #0d1517; --viewer: #24272c; --danger: #f2827a; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid; grid-template-columns: 340px 1fr; height: 100vh;
+  }
+  aside {
+    background: var(--panel); border-right: 1px solid var(--line);
+    overflow-y: auto; padding: 18px 18px 28px;
+  }
+  h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+  section { border-top: 1px solid var(--line); padding: 14px 0 6px; }
+  section h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin: 0 0 10px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .step { background: var(--ink); color: var(--panel); border-radius: 50%; width: 18px; height: 18px;
+          display: inline-grid; place-items: center; font-size: 11px; }
+  label.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; margin: 0 0 12px; }
+  label.row > span:first-child { font-weight: 500; }
+  label.row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+  .num { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+  .num input { width: 68px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px;
+               background: var(--bg); color: var(--ink); font: inherit; text-align: right; }
+  .hint { color: var(--muted); font-size: 12px; margin: -6px 0 12px; }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line);
+         border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  .seg button { border: 0; background: transparent; color: var(--ink); padding: 7px 0; font: inherit; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.btn {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); font: inherit; font-weight: 500; cursor: pointer;
+  }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 10px; padding: 16px; text-align: center;
+    color: var(--muted); cursor: pointer; margin-bottom: 10px;
+  }
+  .drop strong { color: var(--ink); }
+  .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .file-info { font-size: 12px; color: var(--muted); margin: 0 0 10px; word-break: break-word; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; }
+  .check input { accent-color: var(--accent); margin-top: 3px; }
+  .status { font-size: 13px; min-height: 20px; margin: 8px 0 0; color: var(--muted); }
+  .status.error { color: var(--danger); }
+  .stats { font-size: 12px; color: var(--muted); margin: 6px 0 10px; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; }
+  .stats b { color: var(--ink); font-weight: 500; text-align: right; }
+  main { position: relative; background: var(--viewer); min-height: 0; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .overlay {
+    position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+    color: var(--muted); text-align: center; padding: 20px;
+  }
+  .busy {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.12); display: none;
+  }
+  .busy.on { display: block; }
+  .viewbar { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; }
+  .viewbar button {
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .hidden { display: none !important; }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 52vh auto; height: auto; }
+    main { grid-row: 1; position: sticky; top: 0; height: 52vh; z-index: 1; }
+    aside { grid-row: 2; border-right: 0; border-top: 1px solid var(--line); padding: 16px; }
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.1/build/index.module.js",
+    "manifold-3d": "https://cdn.jsdelivr.net/npm/manifold-3d@3.5.5/manifold.js"
+  }
+}
+</script>
+</head>
+<body>
+<aside>
+  <h1>STL Container Maker</h1>
+  <p class="sub">Cut a model in two: one half becomes a hollow container, the other a lid that plugs into it.</p>
+
+  <section>
+    <h2><span class="step">1</span> Model</h2>
+    <div class="drop" id="drop" role="button" tabindex="0">
+      <strong>Drop an STL here</strong><br>or click to choose a file
+      <input type="file" id="file" accept=".stl,model/stl" hidden>
+    </div>
+    <p class="file-info" id="fileInfo">No model loaded. <a href="#" id="sample">Try a sample shape</a>.</p>
+  </section>
+
+  <section id="planeSec" class="hidden">
+    <h2><span class="step">2</span> Cut plane</h2>
+    <div class="seg" id="axis">
+      <button data-axis="x" aria-pressed="false">X</button>
+      <button data-axis="y" aria-pressed="false">Y</button>
+      <button data-axis="z" aria-pressed="true">Z</button>
+    </div>
+    <label class="row"><span>Position</span>
+      <span class="num"><input type="number" id="posNum" step="0.1"> mm</span>
+      <input type="range" id="pos" min="0" max="1000" value="650">
+    </label>
+    <label class="row"><span>Tilt A</span>
+      <span class="num"><input type="number" id="tiltANum" step="1" min="-75" max="75" value="0">°</span>
+      <input type="range" id="tiltA" min="-75" max="75" value="0">
+    </label>
+    <label class="row"><span>Tilt B</span>
+      <span class="num"><input type="number" id="tiltBNum" step="1" min="-75" max="75" value="0">°</span>
+      <input type="range" id="tiltB" min="-75" max="75" value="0">
+    </label>
+    <div class="legend"><span><i style="background:var(--container)"></i>Container</span><span><i style="background:var(--lid)"></i>Lid</span></div>
+    <button class="btn" id="swap">Swap container and lid</button>
+  </section>
+
+  <section id="settingsSec" class="hidden">
+    <h2><span class="step">3</span> Container &amp; lid</h2>
+    <label class="row"><span>Minimum wall thickness</span>
+      <span class="num"><input type="number" id="wallNum" step="0.1" min="0.4" value="2"> mm</span>
+      <input type="range" id="wall" min="0.4" max="10" step="0.1" value="2">
+    </label>
+    <p class="hint">The hollow grows as large as it can while keeping every wall at least this thick.</p>
+    <label class="row"><span>Lid plug depth</span>
+      <span class="num"><input type="number" id="plugNum" step="0.5" min="0" value="5"> mm</span>
+      <input type="range" id="plug" min="0" max="30" step="0.5" value="5">
+    </label>
+    <label class="row"><span>Lid clearance</span>
+      <span class="num"><input type="number" id="clearNum" step="0.05" min="0" value="0.2"> mm</span>
+      <input type="range" id="clear" min="0" max="1" step="0.05" value="0.2">
+    </label>
+    <p class="hint">Gap between the plug and the opening on every side. About 0.15–0.25 mm suits most FDM printers; 0.1 mm for resin.</p>
+    <span style="font-weight:500">Detail</span>
+    <div class="seg" id="detail" style="margin-top:6px">
+      <button data-res="90" aria-pressed="false">Draft</button>
+      <button data-res="140" aria-pressed="true">Normal</button>
+      <button data-res="220" aria-pressed="false">Fine</button>
+    </div>
+    <button class="btn primary" id="make">Make container &amp; lid</button>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section id="resultSec" class="hidden">
+    <h2><span class="step">4</span> Download</h2>
+    <label class="row"><span>Pull apart</span>
+      <input type="range" id="explode" min="0" max="100" value="35">
+    </label>
+    <div class="stats" id="stats"></div>
+    <label class="check"><input type="checkbox" id="printOrient" checked>
+      <span>Lay parts flat for printing<br><span class="hint" style="margin:0">Container opening up, lid flipped so the plug points up.</span></span></label>
+    <div class="btn-row">
+      <button class="btn primary" id="dlContainer">Container .stl</button>
+      <button class="btn primary" id="dlLid">Lid .stl</button>
+    </div>
+    <button class="btn" id="backToCut">Back to cut plane</button>
+  </section>
+</aside>
+
+<main>
+  <canvas id="view"></canvas>
+  <div class="overlay" id="empty">Load an STL to get started</div>
+  <div class="busy" id="busy"></div>
+  <div class="viewbar">
+    <button id="resetView">Reset view</button>
+  </div>
+</main>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
