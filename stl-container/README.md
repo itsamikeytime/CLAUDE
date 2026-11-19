@@ -2,6 +2,10 @@
 
 A static web page that turns any closed STL into a two-part print: a hollow container and a lid that plugs into it.
 
+The page lays out as numbered steps: 1 Model and 2 Cut plane side by side, then 3 Container, 4 Lid, 5 Make and 6 Download.
+
+On dual-screen and folding devices that report their screen split to the browser (viewport segments), the 3D view takes one screen and the settings the other; a **Swap** button on the view switches them. Add `#duo` to the address to preview that layout on any screen.
+
 1. **Load an STL** (drag and drop, or pick a file). Everything runs in your browser; nothing is uploaded.
 2. **Pick the cut plane**: an axis (X, Y or Z), a position along it, and two tilt angles. The teal side becomes the container and the orange side the lid; **Swap** flips them.
 3. **Set the walls and lid**:

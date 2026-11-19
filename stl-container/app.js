@@ -198,7 +198,7 @@ function setModel(geometry, name) {
   $('fileInfo').textContent = `${name} · ${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)} mm · ${tris.toLocaleString()} triangles`;
   $('empty').classList.add('hidden');
   $('planeSec').classList.remove('hidden');
-  $('settingsSec').classList.remove('hidden');
+  for (const id of ['containerSec', 'lidSec', 'makeSec']) $(id).classList.remove('hidden');
   setStatus('');
   updatePlaneView();
   fitView();
@@ -224,7 +224,7 @@ function readFile(file) {
       setModel(g, file.name);
     } catch (e) {
       setStatus('That file couldn\'t be read as an STL.', true);
-      $('settingsSec').classList.remove('hidden');
+      $('makeSec').classList.remove('hidden');
     }
   };
   fr.readAsArrayBuffer(file);
@@ -610,3 +610,33 @@ $('dlLid').addEventListener('click', () => download('lid'));
 $('dlBoth').addEventListener('click', () => download('both'));
 $('dlLidTop').addEventListener('click', () => download('lidTop'));
 $('dlLidInsert').addEventListener('click', () => download('lidInsert'));
+
+// ---------- Dual-screen devices ----------
+// When a fold or hinge splits the screen into two (reported by the browser as viewport
+// segments), put the 3D view on one screen and the settings on the other. Add #duo to the
+// address to preview this layout on any screen.
+const root = document.documentElement;
+function detectDual() {
+  let mode = null;
+  const segs = window.viewport && window.viewport.segments;
+  if (segs && segs.length > 1) {
+    mode = segs[0].width < window.innerWidth - 1 ? 'h' : 'v';
+  } else if (matchMedia('(horizontal-viewport-segments: 2)').matches) {
+    mode = 'h';
+  } else if (matchMedia('(vertical-viewport-segments: 2)').matches) {
+    mode = 'v';
+  }
+  if (!mode && location.hash === '#duo') mode = window.innerWidth >= window.innerHeight ? 'h' : 'v';
+  root.classList.toggle('dual', !!mode);
+  root.classList.toggle('dual-h', mode === 'h');
+  root.classList.toggle('dual-v', mode === 'v');
+}
+try { if (localStorage.getItem('duoSwapped') === '1') root.classList.add('swapped'); } catch (e) {}
+$('duoSwap').addEventListener('click', () => {
+  const on = root.classList.toggle('swapped');
+  try { localStorage.setItem('duoSwapped', on ? '1' : '0'); } catch (e) {}
+});
+window.addEventListener('resize', detectDual);
+window.addEventListener('hashchange', detectDual);
+if (window.viewport && 'onsegmentschange' in window.viewport) window.viewport.addEventListener('segmentschange', detectDual);
+detectDual();

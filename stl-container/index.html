@@ -36,7 +36,7 @@
   body {
     background: var(--bg); color: var(--ink);
     font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: grid; grid-template-columns: 340px 1fr; height: 100%;
+    display: grid; grid-template-columns: 420px 1fr; height: 100%;
   }
   aside {
     background: var(--panel); border-right: 1px solid var(--line);
@@ -45,6 +45,13 @@
   h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
   .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
   section { border-top: 1px solid var(--line); padding: 14px 0 6px; }
+  /* Model and Cut plane share a row when there's room; each stacks when there isn't. */
+  .pair { border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 0 18px; }
+  .pair > section { border-top: 0; min-width: 0; }
+  .pair .drop { padding: 14px 10px; }
+  .pair label.row { grid-template-columns: 1fr auto; }
+  .pair .num input { width: 58px; }
+  .sub-h { font-weight: 500; display: block; margin-bottom: 6px; }
   section h2 {
     font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--muted); margin: 0 0 10px; font-weight: 600;
@@ -102,7 +109,41 @@
   .viewbar button {
     border: 1px solid var(--line); background: var(--panel); color: var(--ink);
     border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
   }
+  .viewbar button:focus-visible, button:focus-visible, .drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .viewbar svg { width: 26px; height: 18px; display: block; }
+  #duoSwap { display: none; }
+  html.dual #duoSwap { display: inline-flex; }
+  html.dual-v #duoSwap svg { transform: rotate(90deg); }
+
+  /* Dual-screen devices (a fold or hinge splits the screen): the 3D view fills one screen and
+     the settings the other, with nothing drawn across the hinge. The env() values come from the
+     browser on such devices; the fallbacks are an even split, used by the #duo preview. */
+  html.dual-h body {
+    grid-template-columns:
+      env(viewport-segment-width 0 0, 50vw)
+      calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw))
+      env(viewport-segment-width 1 0, 50vw);
+    grid-template-rows: 100%; height: 100%;
+  }
+  html.dual-h main { grid-column: 1; grid-row: 1; position: relative; height: auto; top: auto; }
+  html.dual-h aside { grid-column: 3; grid-row: 1; border: 0; border-left: 1px solid var(--line); overflow-y: auto; }
+  html.dual-h.swapped main { grid-column: 3; }
+  html.dual-h.swapped aside { grid-column: 1; border-left: 0; border-right: 1px solid var(--line); }
+  html.dual-v body {
+    grid-template-columns: 100%;
+    grid-template-rows:
+      env(viewport-segment-height 0 0, 50vh)
+      calc(env(viewport-segment-top 0 1, 50vh) - env(viewport-segment-bottom 0 0, 50vh))
+      env(viewport-segment-height 0 1, 50vh);
+    height: 100%;
+  }
+  html.dual-v main { grid-row: 1; grid-column: 1; position: relative; height: auto; top: auto; }
+  html.dual-v aside { grid-row: 3; grid-column: 1; border: 0; border-top: 1px solid var(--line); overflow-y: auto; }
+  html.dual-v.swapped main { grid-row: 3; }
+  html.dual-v.swapped aside { grid-row: 1; border-top: 0; border-bottom: 1px solid var(--line); }
+  html.dual aside { padding: 16px; }
   .hidden { display: none !important; }
   @media (max-width: 760px) {
     body { grid-template-columns: 1fr; grid-template-rows: 52vh auto; height: auto; }
@@ -126,47 +167,49 @@
   <h1>STL Container Maker</h1>
   <p class="sub">Cut a model in two: one half becomes a hollow container, the other a lid that plugs into it.</p>
 
-  <section>
-    <h2><span class="step">1</span> Model</h2>
-    <div class="drop" id="drop" role="button" tabindex="0">
-      <strong>Drop an STL here</strong><br>or click to choose a file
-      <input type="file" id="file" accept=".stl,model/stl" hidden>
-    </div>
-    <p class="file-info" id="fileInfo">No model loaded. <a href="#" id="sample">Try a sample shape</a>.</p>
-  </section>
+  <div class="pair">
+    <section>
+      <h2><span class="step">1</span> Model</h2>
+      <div class="drop" id="drop" role="button" tabindex="0">
+        <strong>Drop an STL here</strong><br>or click to choose
+        <input type="file" id="file" accept=".stl,model/stl" hidden>
+      </div>
+      <p class="file-info" id="fileInfo">No model loaded. <a href="#" id="sample">Try a sample shape</a>.</p>
+    </section>
 
-  <section id="planeSec" class="hidden">
-    <h2><span class="step">2</span> Cut plane</h2>
-    <div class="seg" id="axis">
-      <button data-axis="x" aria-pressed="false">X</button>
-      <button data-axis="y" aria-pressed="false">Y</button>
-      <button data-axis="z" aria-pressed="true">Z</button>
-    </div>
-    <label class="row"><span>Position</span>
-      <span class="num"><input type="number" id="posNum" step="0.1"> mm</span>
-      <input type="range" id="pos" min="0" max="1000" value="650">
-    </label>
-    <label class="row"><span>Tilt A</span>
-      <span class="num"><input type="number" id="tiltANum" step="1" min="-75" max="75" value="0">°</span>
-      <input type="range" id="tiltA" min="-75" max="75" value="0">
-    </label>
-    <label class="row"><span>Tilt B</span>
-      <span class="num"><input type="number" id="tiltBNum" step="1" min="-75" max="75" value="0">°</span>
-      <input type="range" id="tiltB" min="-75" max="75" value="0">
-    </label>
-    <div class="legend"><span><i style="background:var(--container)"></i>Container</span><span><i style="background:var(--lid)"></i>Lid</span></div>
-    <button class="btn" id="swap">Swap container and lid</button>
-  </section>
+    <section id="planeSec" class="hidden">
+      <h2><span class="step">2</span> Cut plane</h2>
+      <div class="seg" id="axis">
+        <button data-axis="x" aria-pressed="false">X</button>
+        <button data-axis="y" aria-pressed="false">Y</button>
+        <button data-axis="z" aria-pressed="true">Z</button>
+      </div>
+      <label class="row"><span>Position</span>
+        <span class="num"><input type="number" id="posNum" step="0.1"> mm</span>
+        <input type="range" id="pos" min="0" max="1000" value="650">
+      </label>
+      <label class="row"><span>Tilt A</span>
+        <span class="num"><input type="number" id="tiltANum" step="1" min="-75" max="75" value="0">°</span>
+        <input type="range" id="tiltA" min="-75" max="75" value="0">
+      </label>
+      <label class="row"><span>Tilt B</span>
+        <span class="num"><input type="number" id="tiltBNum" step="1" min="-75" max="75" value="0">°</span>
+        <input type="range" id="tiltB" min="-75" max="75" value="0">
+      </label>
+      <div class="legend"><span><i style="background:var(--container)"></i>Container</span><span><i style="background:var(--lid)"></i>Lid</span></div>
+      <button class="btn" id="swap">Swap sides</button>
+    </section>
+  </div>
 
-  <section id="settingsSec" class="hidden">
-    <h2><span class="step">3</span> Container &amp; lid</h2>
+  <section id="containerSec" class="hidden">
+    <h2><span class="step">3</span> Container</h2>
     <label class="row"><span>Minimum wall thickness</span>
       <span class="num"><input type="number" id="wallNum" step="0.1" min="0.4" value="2"> mm</span>
       <input type="range" id="wall" min="0.4" max="10" step="0.1" value="2">
     </label>
     <p class="hint">The hollow grows as large as it can while keeping every wall at least this thick.</p>
-    <span style="font-weight:500">Inside surface</span>
-    <div class="seg" id="inside" style="margin-top:6px">
+    <span class="sub-h">Inside surface</span>
+    <div class="seg" id="inside">
       <button data-smooth="0" aria-pressed="true">Follow outside</button>
       <button data-smooth="1" aria-pressed="false">Smooth</button>
     </div>
@@ -177,11 +220,15 @@
       </label>
       <p class="hint">Size of a ball rolled around the inside. Bigger gives a rounder, more bowl-like inside but thicker walls in places; walls never go below the minimum.</p>
     </div>
-    <label class="row"><span>Lid plug depth</span>
+  </section>
+
+  <section id="lidSec" class="hidden">
+    <h2><span class="step">4</span> Lid</h2>
+    <label class="row"><span>Plug depth</span>
       <span class="num"><input type="number" id="plugNum" step="0.5" min="0" value="5"> mm</span>
       <input type="range" id="plug" min="0" max="30" step="0.5" value="5">
     </label>
-    <label class="row"><span>Lid clearance</span>
+    <label class="row"><span>Clearance</span>
       <span class="num"><input type="number" id="clearNum" step="0.05" min="0" value="0.2"> mm</span>
       <input type="range" id="clear" min="0" max="1" step="0.05" value="0.2">
     </label>
@@ -193,7 +240,7 @@
         <span class="num"><input type="number" id="insertUpNum" step="0.5" min="0" value="3"> mm</span>
         <input type="range" id="insertUp" min="0" max="20" step="0.5" value="3">
       </label>
-      <p class="hint">The insert rises into a pocket in the lid top, like the plug goes into the container. The lid clearance applies here too: the insert is that much narrower than the pocket and that much shorter, and so are the pins.</p>
+      <p class="hint">The insert rises into a pocket in the lid top, like the plug goes into the container. The clearance applies here too: the insert is that much narrower than the pocket and that much shorter, and so are the pins.</p>
       <label class="row"><span>Dowel diameter</span>
         <span class="num"><input type="number" id="dowelDNum" step="0.5" min="1.5" value="4"> mm</span>
         <input type="range" id="dowelD" min="1.5" max="12" step="0.5" value="4">
@@ -202,10 +249,14 @@
         <span class="num"><input type="number" id="dowelLNum" step="0.5" min="1" value="5"> mm</span>
         <input type="range" id="dowelL" min="1" max="20" step="0.5" value="5">
       </label>
-      <p class="hint">Holes are made wider than the pins by the lid clearance, and 0.5 mm deeper, to leave room for glue. Pins go only where the holes keep a solid wall around them; smaller pins are used if these don't fit.</p>
+      <p class="hint">Holes are made wider than the pins by the clearance, and 0.5 mm deeper, to leave room for glue. Pins go only where the holes keep a solid wall around them; smaller pins are used if these don't fit.</p>
     </div>
-    <span style="font-weight:500">Detail</span>
-    <div class="seg" id="detail" style="margin-top:6px">
+  </section>
+
+  <section id="makeSec" class="hidden">
+    <h2><span class="step">5</span> Make</h2>
+    <span class="sub-h">Detail</span>
+    <div class="seg" id="detail">
       <button data-res="90" aria-pressed="false">Draft</button>
       <button data-res="140" aria-pressed="true">Normal</button>
       <button data-res="220" aria-pressed="false">Fine</button>
@@ -215,7 +266,7 @@
   </section>
 
   <section id="resultSec" class="hidden">
-    <h2><span class="step">4</span> Download</h2>
+    <h2><span class="step">6</span> Download</h2>
     <label class="row"><span>Pull apart</span>
       <input type="range" id="explode" min="0" max="100" value="35">
     </label>
@@ -238,6 +289,15 @@
   <div class="overlay" id="empty">Load an STL to get started</div>
   <div class="busy" id="busy"></div>
   <div class="viewbar">
+    <button id="duoSwap" title="Swap screens" aria-label="Swap the 3D view and settings between screens">
+      <svg viewBox="0 0 26 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="1" y="1.5" width="11" height="15" rx="2"/>
+        <rect x="14" y="1.5" width="11" height="15" rx="2"/>
+        <path d="M4.5 7.5h7.5M10 5.5l2 2-2 2"/>
+        <path d="M21.5 11h-7.5M16 9l-2 2 2 2"/>
+      </svg>
+      Swap
+    </button>
     <button id="resetView">Reset view</button>
   </div>
 </main>
