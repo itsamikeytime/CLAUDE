@@ -28,10 +28,11 @@ self.onmessage = async (e) => {
       { wasm, BufferGeometry: THREE.BufferGeometry, BufferAttribute: THREE.BufferAttribute, Vector3: THREE.Vector3, MeshBVH },
       positions,
       { ...opts, onProgress: async (message) => self.postMessage({ type: 'progress', message }) });
-    const container = manifoldToTriangles(r.container);
-    const lid = manifoldToTriangles(r.lid);
-    r.container.delete(); r.lid.delete();
-    self.postMessage({ type: 'done', container, lid, info: r.info }, [container.buffer, lid.buffer]);
+    const parts = {};
+    for (const k of ['container', 'lid', 'lidTop', 'lidInsert']) {
+      if (r[k]) { parts[k] = manifoldToTriangles(r[k]); r[k].delete(); }
+    }
+    self.postMessage({ type: 'done', parts, info: r.info }, Object.values(parts).map((p) => p.buffer));
   } catch (err) {
     self.postMessage({ type: 'error', message: err && err.message ? err.message : String(err) });
   }

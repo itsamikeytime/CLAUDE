@@ -56,6 +56,7 @@ function applyTheme() {
   lidMat.color.set(css('--lid') || '#e08a3c');
   resContainerMat.color.set(css('--container') || '#2a8c96');
   resLidMat.color.set(css('--lid') || '#e08a3c');
+  resInsertMat.color.set(css('--insert') || '#c9b458');
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
@@ -73,7 +74,7 @@ const state = {
   frac: 0.65,
   tiltA: 0, tiltB: 0,
   swapped: false,
-  wall: 2, plug: 5, clearance: 0.2, res: 140, smooth: false, smoothR: 12,
+  wall: 2, plug: 5, clearance: 0.2, res: 140, smooth: false, smoothR: 12, splitLid: false, dowelD: 4, dowelL: 5,
   result: null,          // { container: Float32Array, lid: Float32Array, M, Minv, info }
   busy: false,
 };
@@ -105,7 +106,9 @@ resultGroup.matrixAutoUpdate = false;
 scene.add(resultGroup);
 const resContainer = new THREE.Mesh(new THREE.BufferGeometry(), resContainerMat);
 const resLid = new THREE.Mesh(new THREE.BufferGeometry(), resLidMat);
-resultGroup.add(resContainer, resLid);
+const resInsertMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
+const resInsert = new THREE.Mesh(new THREE.BufferGeometry(), resInsertMat);
+resultGroup.add(resContainer, resLid, resInsert);
 resultGroup.visible = false;
 
 applyTheme();
@@ -175,6 +178,11 @@ function setModel(geometry, name) {
   // Default smoothing ball: about a tenth of the model's largest size.
   state.smoothR = Math.max(2, Math.min(50, Math.round(Math.max(s.x, s.y, s.z) / 10)));
   $('smoothR').value = state.smoothR; $('smoothNum').value = state.smoothR;
+  // Default dowel pins scale with the model too: 3 mm on small parts up to 8 mm on big ones.
+  state.dowelD = Math.max(3, Math.min(8, Math.round(Math.max(s.x, s.y, s.z) / 25 * 2) / 2));
+  state.dowelL = Math.max(4, Math.min(10, Math.round(state.dowelD * 1.5)));
+  $('dowelD').value = state.dowelD; $('dowelDNum').value = state.dowelD;
+  $('dowelL').value = state.dowelL; $('dowelLNum').value = state.dowelL;
   state.name = name.replace(/\.stl$/i, '');
   clearResult();
 
@@ -261,6 +269,13 @@ bindPair('tiltA', 'tiltANum', 'tiltA', planeChanged);
 bindPair('tiltB', 'tiltBNum', 'tiltB', planeChanged);
 bindPair('wall', 'wallNum', 'wall', settingsChanged);
 bindPair('smoothR', 'smoothNum', 'smoothR', settingsChanged);
+bindPair('dowelD', 'dowelDNum', 'dowelD', settingsChanged);
+bindPair('dowelL', 'dowelLNum', 'dowelL', settingsChanged);
+$('splitLid').addEventListener('change', () => {
+  state.splitLid = $('splitLid').checked;
+  $('dowelBox').classList.toggle('hidden', !state.splitLid);
+  settingsChanged();
+});
 for (const b of $('inside').querySelectorAll('button')) {
   b.addEventListener('click', () => {
     state.smooth = b.dataset.smooth === '1';
@@ -339,12 +354,11 @@ $('make').addEventListener('click', async () => {
     }
 
     const t0 = performance.now();
-    const opts = { wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res, smooth: state.smooth, smoothRadius: state.smoothR };
+    const opts = { wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res, smooth: state.smooth, smoothRadius: state.smoothR,
+      splitLid: state.splitLid, dowelDiameter: state.dowelD, dowelLength: state.dowelL };
     let r = await runInWorker(pos, opts);
     if (!r) r = await runOnPage(pos, opts);
-    const { container, lid } = r;
-
-    state.result = { container, lid, M, Minv, info: r.info, seconds: (performance.now() - t0) / 1000 };
+    state.result = { ...r.parts, M, Minv, info: r.info, seconds: (performance.now() - t0) / 1000 };
     buildResultMeshes();
     showResult(true);
     fitView(1.5);
@@ -353,6 +367,12 @@ $('make').addEventListener('click', async () => {
       msg = r.info.plugDepth > 0
         ? `The hollow is shallow here, so the plug was shortened to ${r.info.plugDepth.toFixed(1)} mm.`
         : 'The hollow is too shallow for a plug, so the lid is flat.';
+    }
+    const dw = r.info.dowels;
+    if (dw && !dw.count) msg += ' There was no spot with enough material for dowel pins, so glue the insert on flat.';
+    else if (dw && dw.piecesWithout) msg += ` The insert is ${dw.pieces} separate pieces; ${dw.piecesWithout} of them had no room for a pin, so glue those on flat.`;
+    if (dw && dw.count && (dw.diameter < state.dowelD - 1e-6 || dw.length < state.dowelL - 1e-6)) {
+      msg += ` The dowels were made ${dw.diameter.toFixed(1)} mm × ${dw.length.toFixed(1)} mm so they fit.`;
     }
     if (r.info.mergedShells) {
       msg = 'This STL was made of several overlapping pieces; they were merged into one solid first. ' + msg;
@@ -391,7 +411,7 @@ async function runInWorker(positions, opts) {
     w.onmessage = (e) => {
       const d = e.data;
       if (d.type === 'progress') setBusy(d.message);
-      else if (d.type === 'done') resolve({ container: d.container, lid: d.lid, info: d.info });
+      else if (d.type === 'done') resolve({ parts: d.parts, info: d.info });
       else if (d.type === 'error') reject(new Error(d.message));
     };
     w.onerror = (e) => {
@@ -412,10 +432,9 @@ async function runOnPage(positions, opts) {
     { wasm, BufferGeometry: THREE.BufferGeometry, BufferAttribute: THREE.BufferAttribute, Vector3: THREE.Vector3, MeshBVH },
     positions,
     { ...opts, onProgress: async (m) => { setBusy(m); await nextFrame(); } });
-  const container = manifoldToTriangles(r.container);
-  const lid = manifoldToTriangles(r.lid);
-  r.container.delete(); r.lid.delete();
-  return { container, lid, info: r.info };
+  const parts = {};
+  for (const k of ['container', 'lid', 'lidTop', 'lidInsert']) if (r[k]) { parts[k] = manifoldToTriangles(r[k]); r[k].delete(); }
+  return { parts, info: r.info };
 }
 
 function geomFrom(tri) {
@@ -427,10 +446,18 @@ function geomFrom(tri) {
 
 function buildResultMeshes() {
   const r = state.result;
-  resContainer.geometry.dispose();
-  resLid.geometry.dispose();
+  const split = !!r.lidTop;
+  for (const m of [resContainer, resLid, resInsert]) m.geometry.dispose();
   resContainer.geometry = geomFrom(r.container);
-  resLid.geometry = geomFrom(r.lid);
+  resLid.geometry = geomFrom(split ? r.lidTop : r.lid);
+  resInsert.geometry = split ? geomFrom(r.lidInsert) : new THREE.BufferGeometry();
+  resInsert.visible = split;
+  $('dlLid').classList.toggle('hidden', split);
+  $('dlLidTop').classList.toggle('hidden', !split);
+  $('dlLidInsert').classList.toggle('hidden', !split);
+  $('orientHint').textContent = split
+    ? 'Container opening up, lid top on its flat cut face, insert with its pins pointing up.'
+    : 'Container opening up, lid flipped so the plug points up.';
   resultGroup.matrix.copy(r.Minv);
   resultGroup.matrixWorldNeedsUpdate = true;
   applyExplode();
@@ -443,13 +470,19 @@ function buildResultMeshes() {
     `<span>Lid material</span><b>${ml(i.lidVolume)}</b>` +
     `<span>Inside surface</span><b>${i.smoothRadius ? `Smooth (${i.smoothRadius} mm ball)` : 'Follows outside'}</b>` +
     `<span>Plug depth</span><b>${i.plugDepth.toFixed(1)} mm</b>` +
+    (i.dowels ? `<span>Dowels</span><b>${i.dowels.count ? `${i.dowels.count} × ${i.dowels.diameter.toFixed(1)} mm, ${i.dowels.length.toFixed(1)} mm long` : 'none (glue flat)'}</b>` + (i.dowels.pieces > 1 ? `<span>Insert pieces</span><b>${i.dowels.pieces}</b>` : '') : '') +
     `<span>Accuracy</span><b>${i.gridSpacing.toFixed(2)} mm grid · ${r.seconds.toFixed(1)} s</b>`;
 }
 
 function applyExplode() {
   const gap = ($('explode').value / 100) * state.radius * 1.2;
   resContainer.position.set(0, 0, -gap / 2);
-  resLid.position.set(0, 0, gap / 2);
+  if (resInsert.visible) {
+    resInsert.position.set(0, 0, 0);
+    resLid.position.set(0, 0, gap);
+  } else {
+    resLid.position.set(0, 0, gap / 2);
+  }
 }
 
 function showResult(on) {
@@ -473,6 +506,7 @@ function exportTriangles(which) {
   const out = new Float32Array(src.length);
   if ($('printOrient').checked) {
     // Container: opening already faces up (+z). Lid: flip so the plug points up.
+    // Lid top and insert are already the right way up (flat cut face down, pins up).
     const flip = which === 'lid';
     let minZ = Infinity;
     for (let i = 0; i < src.length; i += 3) {
@@ -542,14 +576,15 @@ function zip(files) { // [{name, data: Uint8Array}] -> Blob (stored, no compress
 async function download(which) {
   if (!state.result) return;
   const base = state.name || 'model';
-  const list = which === 'both' ? ['container', 'lid'] : [which];
+  const label = { container: 'container', lid: 'lid', lidTop: 'lid-top', lidInsert: 'lid-insert' };
+  const list = which === 'both' ? ['container', 'lid', 'lidTop', 'lidInsert'].filter((k) => state.result[k]) : [which];
   const files = list.map((w) => ({
-    name: `${base}-${w}.stl`,
-    data: new Uint8Array(trianglesToSTL(exportTriangles(w), `${base}-${w}`)),
+    name: `${base}-${label[w]}.stl`,
+    data: new Uint8Array(trianglesToSTL(exportTriangles(w), `${base}-${label[w]}`)),
   }));
   const dl = await viewerDownloads();
   if (dl) {
-    const filename = which === 'both' ? `${base}-container-and-lid.zip` : `${base}-${which}.zip`;
+    const filename = which === 'both' ? `${base}-all-parts.zip` : `${base}-${label[which]}.zip`;
     try {
       await dl.save({ filename, data: zip(files) });
       setStatus(`Saved ${filename}. Unzip it to get the STL.`);
@@ -561,7 +596,7 @@ async function download(which) {
   const blob = which === 'both' ? zip(files) : new Blob([files[0].data], { type: 'model/stl' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = which === 'both' ? `${base}-container-and-lid.zip` : files[0].name;
+  a.download = which === 'both' ? `${base}-all-parts.zip` : files[0].name;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -570,3 +605,5 @@ async function download(which) {
 $('dlContainer').addEventListener('click', () => download('container'));
 $('dlLid').addEventListener('click', () => download('lid'));
 $('dlBoth').addEventListener('click', () => download('both'));
+$('dlLidTop').addEventListener('click', () => download('lidTop'));
+$('dlLidInsert').addEventListener('click', () => download('lidInsert'));

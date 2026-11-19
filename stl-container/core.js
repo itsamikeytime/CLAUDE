@@ -128,6 +128,82 @@ function voxelizeInside(positions, ox, oy, oz, h, nx, ny, nz) {
   return inside;
 }
 
+// Pick spots for dowel pins on the insert's top face. A pin must sit inside the insert with a
+// little margin, and its hole must keep `wall` of material around it all the way up through the
+// lid top. Tries smaller and shorter pins if the requested size doesn't fit anywhere.
+function placeDowels(wasm, topHalf, plugOutline, o) {
+  const trash = [];
+  const t = (x) => { trash.push(x); return x; };
+  const sizes = [];
+  for (const df of [1, 0.75, 0.5]) for (const lf of [1, 0.6]) {
+    const d = o.diameter * df;
+    if (d >= Math.min(2, o.diameter)) sizes.push([d, o.length * lf]);
+  }
+  let best = { points: [], diameter: o.diameter, length: o.length };
+  try {
+    for (const [d, L] of sizes) {
+      const r = d / 2, holeR = r + o.clearance;
+      const pinRegion = t(plugOutline.offset(-(r + 0.8), 'Round'));
+      if (pinRegion.isEmpty()) continue;
+      const top = L + 0.5 + o.wall; // hole depth plus material left above it
+      let cap = null;
+      for (let i = 0; i <= 8; i++) {
+        const sl = t(topHalf.slice(0.02 + (top - 0.02) * i / 8));
+        cap = cap ? t(cap.intersect(sl)) : sl;
+      }
+      const capRegion = t(cap.offset(-(holeR + o.wall), 'Round'));
+      const valid = t(pinRegion.intersect(capRegion));
+      if (valid.isEmpty()) continue;
+
+      // Candidate spots on a grid inside the valid region (even-odd point-in-polygon).
+      const polys = valid.toPolygons();
+      const b = valid.bounds();
+      const nG = 60, cand = [];
+      const inside = (x, y) => {
+        let c = false;
+        for (const poly of polys) {
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const [xi, yi] = poly[i], [xj, yj] = poly[j];
+            if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+          }
+        }
+        return c;
+      };
+      for (let i = 0; i <= nG; i++) for (let j = 0; j <= nG; j++) {
+        const x = b.min[0] + (b.max[0] - b.min[0]) * i / nG, y = b.min[1] + (b.max[1] - b.min[1]) * j / nG;
+        if (inside(x, y)) cand.push([x, y]);
+      }
+      if (!cand.length) continue;
+
+      // Spread the pins out: first the spot farthest from the middle, then each next spot as
+      // far as possible from the ones already chosen.
+      const minSep = Math.max(2 * holeR + 2 * o.wall, 2.5 * d);
+      const cx = cand.reduce((a, p) => a + p[0], 0) / cand.length, cy = cand.reduce((a, p) => a + p[1], 0) / cand.length;
+      const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+      const pts = [];
+      if (o.maxCount === 1) {
+        pts.push(cand.reduce((a, p) => (dist(p, [cx, cy]) < dist(a, [cx, cy]) ? p : a)));
+      } else {
+        pts.push(cand.reduce((a, p) => (dist(p, [cx, cy]) > dist(a, [cx, cy]) ? p : a)));
+        while (pts.length < o.maxCount) {
+          let bestP = null, bestD = -1;
+          for (const p of cand) {
+            const m = Math.min(...pts.map((q) => dist(p, q)));
+            if (m > bestD) { bestD = m; bestP = p; }
+          }
+          if (bestD < minSep) break;
+          pts.push(bestP);
+        }
+      }
+      best = { points: pts, diameter: d, length: L };
+      break;
+    }
+  } finally {
+    for (const x of trash) { try { x.delete(); } catch (e) {} }
+  }
+  return best;
+}
+
 // Separable Gaussian blur (sigma in cells) of the bottom `kLimit` layers of a grid, in place.
 function blur3d(f, _nx, _ny, kLimit, nx, ny, nz, sigma) {
   const r = Math.max(1, Math.min(40, Math.ceil(2.5 * sigma)));
@@ -382,24 +458,61 @@ export async function makeContainerAndLid(deps, positions, opts) {
     const s = cavity.slice(-depth); sliceGarbage.push(s);
     if (outline) { outline = outline.intersect(s); sliceGarbage.push(outline); }
   }
-  let lid, plugInfo = { depth: 0 };
+  let lid = null, lidTop = null, lidInsert = null, plugInfo = { depth: 0 }, dowelInfo = null;
   let plugOutline = outline ? outline.offset(-clearance, 'Round') : null;
   if (plugOutline) sliceGarbage.push(plugOutline);
-  if (plugOutline && depth > 0 && plugOutline.area() > 1e-6) {
+  const hasPlug = plugOutline && depth > 0 && plugOutline.area() > 1e-6;
+  if (hasPlug) plugInfo = { depth };
+  if (opts.splitLid && hasPlug) {
+    // Two-part lid: the top prints flat on its cut face, the insert prints standing on its
+    // bottom with dowel pins pointing up. Pins fit into holes drilled up into the top.
+    await progress('Splitting the lid and placing dowels…');
+    const insertBody = keep(plugOutline.extrude(depth).translate([0, 0, -depth]));
+    // A cut can cross the model more than once, giving several separate insert pieces;
+    // each piece gets its own pins.
+    const pieces = plugOutline.decompose();
+    const pins = [], holes = [];
+    dowelInfo = { count: 0, pieces: pieces.length, piecesWithout: 0, diameter: Infinity, length: Infinity };
+    for (const piece of pieces) {
+      const placed = placeDowels(wasm, topHalf, piece, {
+        diameter: opts.dowelDiameter || 4, length: opts.dowelLength || 5,
+        clearance, wall: Math.max(1, Math.min(wall, 2)), maxCount: opts.dowelCount || 3,
+      });
+      piece.delete();
+      if (!placed.points.length) { dowelInfo.piecesWithout++; continue; }
+      const r = placed.diameter / 2, L = placed.length;
+      dowelInfo.count += placed.points.length;
+      dowelInfo.diameter = Math.min(dowelInfo.diameter, placed.diameter);
+      dowelInfo.length = Math.min(dowelInfo.length, placed.length);
+      for (const [x, y] of placed.points) {
+        pins.push(keep(wasm.Manifold.cylinder(L + 0.5, r, r, 32).translate([x, y, -0.5])));
+        holes.push(keep(wasm.Manifold.cylinder(L + 0.5 + 1, r + clearance, r + clearance, 32).translate([x, y, -1])));
+      }
+    }
+    if (!dowelInfo.count) { dowelInfo.diameter = 0; dowelInfo.length = 0; }
+    if (pins.length) {
+      lidInsert = wasm.Manifold.union([insertBody, ...pins]);
+      lidTop = topHalf.subtract(keep(wasm.Manifold.union(holes)));
+    } else {
+      lidInsert = insertBody.translate([0, 0, 0]);
+      lidTop = topHalf.translate([0, 0, 0]);
+    }
+  } else if (hasPlug) {
     const plug = keep(plugOutline.extrude(depth + 0.5 * h).translate([0, 0, -depth]));
     lid = topHalf.add(plug);
-    plugInfo = { depth };
   } else {
     lid = topHalf.translate([0, 0, 0]);
   }
   for (const s of sliceGarbage) { try { s.delete(); } catch (e) {} }
 
   const result = {
-    container, lid,
+    container, lid, lidTop, lidInsert,
     info: {
       gridSpacing: h, refined, mergedShells: merged, smoothRadius: smoothR, plugDepth: plugInfo.depth,
       cavityVolume: cavity.volume(), modelVolume: model.volume(),
-      containerVolume: container.volume(), lidVolume: lid.volume(),
+      containerVolume: container.volume(),
+      lidVolume: lid ? lid.volume() : lidTop.volume() + lidInsert.volume(),
+      dowels: dowelInfo,
     },
   };
   for (const g of garbage) { try { g.delete(); } catch (e) {} }

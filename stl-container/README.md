@@ -9,6 +9,7 @@ A static web page that turns any closed STL into a two-part print: a hollow cont
    - *Inside surface*: **Follow outside** keeps the hollow as large as possible, so the inside mirrors the outside's bumps and folds. **Smooth** rolls a ball of the chosen size around the inside and keeps only the space it can reach, giving a rounded, bowl-like inside. A bigger ball is smoother but leaves thicker walls in places; walls never go below the minimum either way.
    - *Lid plug depth*: how far the lid's plug reaches into the container.
    - *Lid clearance*: how much smaller than the opening the plug is, on every side, so it fits after printing.
+   - *Print the lid in two parts*: the lid top prints flat on its cut face, so its outside never sits on the bed or on supports. The plug becomes a separate insert with dowel pins on top that glue into matching holes in the lid top. Holes are wider than the pins by the lid clearance and 0.5 mm deeper, for glue. Pins are placed only where each hole keeps a solid wall around it (up to three per insert piece, spread apart), and get smaller automatically if the chosen size doesn't fit.
    - *Detail*: finer is more accurate but slower.
 4. **Make container & lid**, check the result, and download each part as STL. "Lay parts flat for printing" puts the container opening-up and flips the lid so its plug points up.
 

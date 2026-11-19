@@ -16,6 +16,7 @@
     --accent-ink: #ffffff;
     --container: #2a8c96;
     --lid: #e08a3c;
+    --insert: #c9a227;
     --danger: #b3261e;
     --viewer: #e9e7e1;
     color-scheme: light;
@@ -185,6 +186,19 @@
       <input type="range" id="clear" min="0" max="1" step="0.05" value="0.2">
     </label>
     <p class="hint">Gap between the plug and the opening on every side. About 0.15–0.25 mm suits most FDM printers; 0.1 mm for resin.</p>
+    <label class="check"><input type="checkbox" id="splitLid">
+      <span>Print the lid in two parts<br><span class="hint" style="margin:0">The lid top prints flat on its cut face, so its outside never touches the bed. The plug becomes a separate insert with dowel pins that glue into holes in the top.</span></span></label>
+    <div id="dowelBox" class="hidden">
+      <label class="row"><span>Dowel diameter</span>
+        <span class="num"><input type="number" id="dowelDNum" step="0.5" min="1.5" value="4"> mm</span>
+        <input type="range" id="dowelD" min="1.5" max="12" step="0.5" value="4">
+      </label>
+      <label class="row"><span>Dowel length</span>
+        <span class="num"><input type="number" id="dowelLNum" step="0.5" min="1" value="5"> mm</span>
+        <input type="range" id="dowelL" min="1" max="20" step="0.5" value="5">
+      </label>
+      <p class="hint">Holes are made wider than the pins by the lid clearance, and 0.5 mm deeper, to leave room for glue. Pins go only where the holes keep a solid wall around them; smaller pins are used if these don't fit.</p>
+    </div>
     <span style="font-weight:500">Detail</span>
     <div class="seg" id="detail" style="margin-top:6px">
       <button data-res="90" aria-pressed="false">Draft</button>
@@ -202,12 +216,14 @@
     </label>
     <div class="stats" id="stats"></div>
     <label class="check"><input type="checkbox" id="printOrient" checked>
-      <span>Lay parts flat for printing<br><span class="hint" style="margin:0">Container opening up, lid flipped so the plug points up.</span></span></label>
+      <span>Lay parts flat for printing<br><span class="hint" style="margin:0" id="orientHint">Container opening up, lid flipped so the plug points up.</span></span></label>
     <div class="btn-row">
       <button class="btn primary" id="dlContainer">Container .stl</button>
       <button class="btn primary" id="dlLid">Lid .stl</button>
+      <button class="btn primary hidden" id="dlLidTop">Lid top .stl</button>
+      <button class="btn primary hidden" id="dlLidInsert" style="grid-column: 1 / -1">Lid insert .stl</button>
     </div>
-    <button class="btn" id="dlBoth" style="margin-bottom:10px">Both parts (.zip)</button>
+    <button class="btn" id="dlBoth" style="margin-bottom:10px">All parts (.zip)</button>
     <button class="btn" id="backToCut">Back to cut plane</button>
   </section>
 </aside>
