@@ -373,7 +373,8 @@ $('make').addEventListener('click', async () => {
     }
     const dw = r.info.dowels;
     if (dw && !dw.count) msg += ' There was no spot with enough material for dowel pins, so glue the insert on flat.';
-    else if (dw && dw.piecesWithout) msg += ` The insert is ${dw.pieces} separate pieces; ${dw.piecesWithout} of them had no room for a pin, so glue those on flat.`;
+    if (dw && dw.pocketsDropped) msg += ` ${dw.pocketsDropped === dw.pieces ? 'The lid was too thin for both a pocket and pins, so the insert' : `${dw.pocketsDropped} insert piece${dw.pocketsDropped > 1 ? 's' : ''}`} ${dw.pocketsDropped === dw.pieces ? 'stops' : (dw.pocketsDropped > 1 ? 'stop' : 'stops')} at the lid's cut face${dw.pocketsDropped === dw.pieces ? '' : ' (no room for both a pocket and pins there)'}; the pins go straight into the cut face.`;
+    if (dw && dw.count && dw.piecesWithout) msg += ` The insert is ${dw.pieces} separate pieces; ${dw.piecesWithout} of them had no room for a pin, so glue those on flat.`;
     if (dw && dw.count && (dw.diameter < state.dowelD - 1e-6 || dw.length < state.dowelL - 1e-6)) {
       msg += ` The dowels were made ${dw.diameter.toFixed(1)} mm × ${dw.length.toFixed(1)} mm so they fit.`;
     }

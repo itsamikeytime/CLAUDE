@@ -135,10 +135,10 @@ function placeDowels(wasm, topHalf, plugOutline, o) {
   const trash = [];
   const t = (x) => { trash.push(x); return x; };
   const sizes = [];
-  for (const df of [1, 0.75, 0.5]) for (const lf of [1, 0.6]) {
-    const d = o.diameter * df;
-    if (d >= Math.min(2, o.diameter)) sizes.push([d, o.length * lf]);
-  }
+  // Requested size first, then smaller ones, always ending with 2 mm (or the requested size if
+  // that's already smaller).
+  const ds = [...new Set([1, 0.75, 0.5].map((f) => Math.max(Math.min(2, o.diameter), o.diameter * f)).concat(Math.min(2, o.diameter)))];
+  for (const d of ds) for (const lf of [1, 0.6]) sizes.push([d, o.length * lf]);
   let best = { points: [], diameter: o.diameter, length: o.length };
   try {
     for (const [d, L] of sizes) {
@@ -491,27 +491,39 @@ export async function makeContainerAndLid(deps, positions, opts) {
     dowelInfo = { count: 0, pieces: pieces.length, piecesWithout: 0, diameter: Infinity, length: Infinity, up: 0 };
     for (const piece of pieces) {
       ins.push(keep(piece.extrude(depth).translate([0, 0, -depth])));
-      let upper = null, zTop = 0;
+      let upper = null, pocket = null, zTop = 0;
       if (capInset && up - clearance > 0.2) {
-        const pocket = piece.offset(clearance, 'Round').intersect(capInset);
+        pocket = piece.offset(clearance, 'Round').intersect(capInset);
         upper = pocket.offset(-clearance, 'Round');
-        if (upper.area() > 1e-3) {
-          cuts.push(keep(pocket.extrude(up + 1).translate([0, 0, -1])));
-          ins.push(keep(upper.extrude(up - clearance + 0.01).translate([0, 0, -0.01])));
-          zTop = up - clearance;
-          dowelInfo.up = up;
-        } else { upper.delete(); upper = null; }
-        pocket.delete();
+        if (upper.area() <= 1e-3) { upper.delete(); upper = null; pocket.delete(); pocket = null; }
       }
-      const placed = placeDowels(wasm, topHalf, upper || piece, {
-        diameter: opts.dowelDiameter || 4, length: opts.dowelLength || 5, zBase: upper ? up : 0,
+      const dowelOpts = {
+        diameter: opts.dowelDiameter || 4, length: opts.dowelLength || 5,
         clearance, wall: Math.max(1, Math.min(wall, 2)), maxCount: opts.dowelCount || 3,
-      });
-      if (upper) upper.delete();
+      };
+      let placed = placeDowels(wasm, topHalf, upper || piece, { ...dowelOpts, zBase: upper ? up : 0 });
+      if (!placed.points.length && upper) {
+        // No room for pins above the pocket: pins matter more for lining the parts up, so
+        // drop this piece's pocket and put the pins straight into the lid's cut face.
+        const flat = placeDowels(wasm, topHalf, piece, { ...dowelOpts, zBase: 0 });
+        if (flat.points.length) {
+          placed = flat;
+          upper.delete(); upper = null; pocket.delete(); pocket = null;
+          dowelInfo.pocketsDropped = (dowelInfo.pocketsDropped || 0) + 1;
+        }
+      }
+      if (upper) {
+        cuts.push(keep(pocket.extrude(up + 1).translate([0, 0, -1])));
+        ins.push(keep(upper.extrude(up - clearance + 0.01).translate([0, 0, -0.01])));
+        zTop = up - clearance;
+        dowelInfo.up = up;
+        upper.delete(); pocket.delete();
+      }
+      const hadPocket = zTop > 0;
       piece.delete();
       if (!placed.points.length) { dowelInfo.piecesWithout++; continue; }
       const r = placed.diameter / 2, L = placed.length;
-      const zCeil = upper ? up : 0; // where the holes start in the lid top
+      const zCeil = hadPocket ? up : 0; // where the holes start in the lid top
       dowelInfo.count += placed.points.length;
       dowelInfo.diameter = Math.min(dowelInfo.diameter, placed.diameter);
       dowelInfo.length = Math.min(dowelInfo.length, placed.length);
