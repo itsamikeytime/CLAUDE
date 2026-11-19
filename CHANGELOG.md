@@ -1,5 +1,10 @@
 # MikeyTime Ring Studio changelog
 
+## v1.5.2
+
+### Improved
+- **Compact preview toolbar on phones turned sideways.** The view switch reads "2D" / "3D" and Print settings is an icon button, so the toolbar fits on one row (down to iPhone SE size) and the preview gets the space back.
+
 ## v1.5.1
 
 ### Fixed
