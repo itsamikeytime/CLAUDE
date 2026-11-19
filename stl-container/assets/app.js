@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import Module from 'manifold-3d';
-import { makeContainerAndLid, manifoldToTriangles, trianglesToSTL } from './core.js?v=20261119-3';
+import { makeContainerAndLid, manifoldToTriangles, trianglesToSTL } from './core.js?v=20261119-4';
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -418,7 +418,7 @@ function startWorker() {
   if (workerReady) return workerReady;
   workerReady = new Promise((resolve) => {
     let w;
-    try { w = new Worker(new URL('./worker.js?v=20261119-3', import.meta.url), { type: 'module' }); } catch (e) { resolve(null); return; }
+    try { w = new Worker(new URL('./worker.js?v=20261119-4', import.meta.url), { type: 'module' }); } catch (e) { resolve(null); return; }
     const timer = setTimeout(() => { w.terminate(); resolve(null); }, 30000);
     w.onmessage = (e) => { if (e.data.type === 'ready') { clearTimeout(timer); resolve(w); } };
     w.onerror = (e) => { e.preventDefault(); clearTimeout(timer); w.terminate(); resolve(null); };
@@ -646,6 +646,35 @@ const postureFolded = () =>
 const foldableInner = matchMedia('(pointer: coarse) and (min-width: 540px) and (min-height: 540px) and (max-width: 1000px) and (max-height: 1000px)');
 let splitPref = null; // 'on' / 'off' once the viewer uses the Split view button
 try { splitPref = localStorage.getItem('splitPref'); } catch (e) {}
+// Where the display's physical middle (the fold) falls inside the page. Safari can give part of
+// the screen to its own controls (in landscape on a foldable, a bar down one side), so the
+// page's middle isn't the display's middle. The bar's width is the screen width minus the
+// page width. It sits along the phone's top edge (it carries the status icons), so which side
+// it's on follows the rotation. Falls back to the page's middle when there's nothing to correct.
+function foldMiddle() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const landscape = w > h;
+  const sw = landscape ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+  const gap = sw - w;
+  if (!(gap > 8 && gap < w * 0.4)) return w / 2;
+  // iOS: window.orientation 90 = turned anticlockwise (top edge on the left), -90 = clockwise.
+  let side = null;
+  if (typeof window.orientation === 'number') side = window.orientation === 90 ? 'left' : window.orientation === -90 ? 'right' : null;
+  else if (screen.orientation) side = screen.orientation.angle === 90 ? 'left' : screen.orientation.angle === 270 ? 'right' : null;
+  if (!side) return w / 2;
+  return side === 'left' ? sw / 2 - gap : sw / 2;
+}
+// A divider position the viewer dragged to, as a fraction of the page width, kept separately
+// for portrait and landscape. Double-tapping the divider goes back to automatic.
+const splitKey = () => (window.innerWidth > window.innerHeight ? 'splitX-landscape' : 'splitX-portrait');
+function savedSplit() { try { const v = parseFloat(localStorage.getItem(splitKey())); return v > 0.2 && v < 0.8 ? v : null; } catch (e) { return null; } }
+function splitX() {
+  const w = window.innerWidth;
+  const f = savedSplit();
+  const x = f ? f * w : foldMiddle();
+  return Math.min(w * 0.75, Math.max(w * 0.25, x));
+}
+
 function detectDual() {
   let mode = null, native = true;
   const segs = window.viewport && window.viewport.segments;
@@ -674,6 +703,11 @@ function detectDual() {
     const px = (v) => `${Math.max(0, Math.round(v))}px`;
     if (mode === 'h') { rs.setProperty('--seg0', px(a.width)); rs.setProperty('--hinge', px(b.x - (a.x + a.width))); rs.setProperty('--seg1', px(b.width)); }
     else { rs.setProperty('--seg0', px(a.height)); rs.setProperty('--hinge', px(b.y - (a.y + a.height))); rs.setProperty('--seg1', px(b.height)); }
+  } else if (mode === 'h') {
+    // No segments reported: put the divider on the physical middle of the display (see foldMiddle).
+    rs.setProperty('--seg0', `${Math.round(splitX())}px`);
+    rs.setProperty('--hinge', '0px');
+    rs.setProperty('--seg1', 'minmax(0, 1fr)');
   } else {
     for (const v of ['--seg0', '--hinge', '--seg1']) rs.removeProperty(v);
   }
@@ -689,6 +723,31 @@ function detectDual() {
     window.scrollTo(0, 0); // don't leave the page scrolled from the previous layout
     requestAnimationFrame(() => { resize(); if (state.positions) fitView(resultGroup.visible ? 1.5 : 1.15); });
   }
+}
+{
+  const div = $('divider');
+  let dragging = false;
+  const place = (x) => {
+    const w = window.innerWidth;
+    x = Math.min(w * 0.75, Math.max(w * 0.25, x));
+    root.style.setProperty('--seg0', `${Math.round(x)}px`);
+    return x;
+  };
+  div.addEventListener('pointerdown', (e) => { dragging = true; div.setPointerCapture(e.pointerId); div.classList.add('on'); e.preventDefault(); });
+  div.addEventListener('pointermove', (e) => { if (dragging) place(e.clientX); });
+  const end = (e) => {
+    if (!dragging) return;
+    dragging = false; div.classList.remove('on');
+    const x = place(e.clientX);
+    try { localStorage.setItem(splitKey(), String(x / window.innerWidth)); } catch (err) {}
+    resize(); if (state.positions) fitView(resultGroup.visible ? 1.5 : 1.15);
+  };
+  div.addEventListener('pointerup', end);
+  div.addEventListener('pointercancel', end);
+  div.addEventListener('dblclick', () => {
+    try { localStorage.removeItem(splitKey()); } catch (err) {}
+    detectDual(); resize(); if (state.positions) fitView(resultGroup.visible ? 1.5 : 1.15);
+  });
 }
 $('splitToggle').addEventListener('click', () => {
   splitPref = root.classList.contains('dual') ? 'off' : 'on';
