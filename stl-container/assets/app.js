@@ -226,7 +226,9 @@ function readFile(file) {
       if (!g.attributes.position || g.attributes.position.count < 12) throw new Error('empty');
       setModel(g, file.name);
     } catch (e) {
-      setStatus('That file couldn\'t be read as an STL.', true);
+      setStatus(/\.stl$/i.test(file.name)
+        ? `${file.name} couldn't be read. It may be damaged or not a real STL file.`
+        : `${file.name} isn't an STL file. Choose a file ending in .stl.`, true);
       $('makeSec').classList.remove('hidden');
     }
   };
@@ -236,7 +238,10 @@ function readFile(file) {
 const drop = $('drop');
 drop.addEventListener('click', () => $('file').click());
 drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
-$('file').addEventListener('change', (e) => readFile(e.target.files[0]));
+$('file').addEventListener('change', (e) => {
+  readFile(e.target.files[0]);
+  e.target.value = ''; // so choosing the same file again still loads it
+});
 for (const t of [drop, canvas]) {
   t.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
   t.addEventListener('dragleave', () => drop.classList.remove('over'));
