@@ -35,7 +35,7 @@
   body {
     background: var(--bg); color: var(--ink);
     font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: grid; grid-template-columns: 340px 1fr; height: 100vh;
+    display: grid; grid-template-columns: 340px 1fr; height: 100%;
   }
   aside {
     background: var(--panel); border-right: 1px solid var(--line);
@@ -195,6 +195,7 @@
       <button class="btn primary" id="dlContainer">Container .stl</button>
       <button class="btn primary" id="dlLid">Lid .stl</button>
     </div>
+    <button class="btn" id="dlBoth" style="margin-bottom:10px">Both parts (.zip)</button>
     <button class="btn" id="backToCut">Back to cut plane</button>
   </section>
 </aside>

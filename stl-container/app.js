@@ -12,7 +12,13 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 let wasmPromise = null;
 function getWasm() {
   if (!wasmPromise) {
-    wasmPromise = Module().then((w) => { w.setup(); return w; });
+    // Use a copy of the engine served next to this page when there is one (some hosts
+    // only allow scripts from the CDN); otherwise Module() fetches it from the CDN.
+    wasmPromise = fetch('./manifold.wasm')
+      .then((r) => (r.ok && /wasm|octet/.test(r.headers.get('content-type') || '') ? r.arrayBuffer() : null))
+      .catch(() => null)
+      .then((bin) => Module(bin ? { wasmBinary: bin } : {}))
+      .then((w) => { w.setup(); return w; });
   }
   return wasmPromise;
 }
@@ -429,13 +435,75 @@ function exportTriangles(which) {
   }
   return out;
 }
-function download(which) {
+// Inside a claude.ai artifact, files can only be saved through the viewer's download
+// prompt, which doesn't accept .stl, so the part goes out inside a .zip there.
+let savePromise = null;
+function viewerDownloads() {
+  if (!savePromise) {
+    savePromise = window.claude && typeof window.claude.use === 'function'
+      ? window.claude.use('downloads').catch(() => null)
+      : Promise.resolve(null);
+  }
+  return savePromise;
+}
+viewerDownloads();
+
+const CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xffffffff;
+  for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+function zip(files) { // [{name, data: Uint8Array}] -> Blob (stored, no compression)
+  const parts = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = new TextEncoder().encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint32(14, crc, true);
+    h.setUint32(18, size, true); h.setUint32(22, size, true); h.setUint16(26, name.length, true);
+    parts.push(h.buffer, name, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true);
+    c.setUint32(16, crc, true); c.setUint32(20, size, true); c.setUint32(24, size, true);
+    c.setUint16(28, name.length, true); c.setUint32(42, offset, true);
+    central.push(c.buffer, name);
+    offset += 30 + name.length + size;
+  }
+  const cdSize = central.reduce((a, b) => a + b.byteLength, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+  e.setUint32(12, cdSize, true); e.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, e.buffer], { type: 'application/zip' });
+}
+
+async function download(which) {
   if (!state.result) return;
-  const name = `${state.name || 'model'}-${which}`;
-  const blob = new Blob([trianglesToSTL(exportTriangles(which), name)], { type: 'model/stl' });
+  const base = state.name || 'model';
+  const list = which === 'both' ? ['container', 'lid'] : [which];
+  const files = list.map((w) => ({
+    name: `${base}-${w}.stl`,
+    data: new Uint8Array(trianglesToSTL(exportTriangles(w), `${base}-${w}`)),
+  }));
+  const dl = await viewerDownloads();
+  if (dl) {
+    const filename = which === 'both' ? `${base}-container-and-lid.zip` : `${base}-${which}.zip`;
+    try {
+      await dl.save({ filename, data: zip(files) });
+      setStatus(`Saved ${filename}. Unzip it to get the STL.`);
+    } catch (err) {
+      if (err && err.code !== 'declined') setStatus('This view can\'t save files. Open the page in a browser tab to download.', true);
+    }
+    return;
+  }
+  const blob = which === 'both' ? zip(files) : new Blob([files[0].data], { type: 'model/stl' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = name + '.stl';
+  a.download = which === 'both' ? `${base}-container-and-lid.zip` : files[0].name;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -443,3 +511,4 @@ function download(which) {
 }
 $('dlContainer').addEventListener('click', () => download('container'));
 $('dlLid').addEventListener('click', () => download('lid'));
+$('dlBoth').addEventListener('click', () => download('both'));
