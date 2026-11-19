@@ -44,7 +44,7 @@ assets/worker.js     runs the geometry in the background
 assets/manifold.wasm geometry engine (a local copy, so it doesn't depend on the CDN)
 ```
 
-three.js, three-mesh-bvh and the manifold-3d loader still come from jsDelivr. In `index.html`, change the `og:image` line to the full address of `preview.jpg` on your site so link previews show the image.
+three.js, three-mesh-bvh and the manifold-3d loader still come from jsDelivr. It's set up for https://container.michaelkiaunis.com/; if it moves, update the `og:image` and `og:url` lines in `index.html`.
 
 It has to be served over HTTP(S), not opened as a local `file://`, because it uses ES modules and a worker. To try it locally:
 
