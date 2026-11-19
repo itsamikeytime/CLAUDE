@@ -1,5 +1,13 @@
 # MikeyTime Ring Studio changelog
 
+## v1.5.0
+
+### Improved
+- **New layout, matching the STL Container Maker.** On a computer, Band Settings and the stone cards sit in a column on the left that scrolls on its own, and the preview fills the rest of the screen, so it's always in view while you work. Phones keep the preview pinned on top with settings scrolling underneath. A phone turned sideways shows the preview and settings side by side.
+- **The preview fills its space.** The 2D blueprint's visible area follows the shape of the preview, with the grid filling it, and the 3D view fits the ring to whichever side is tighter. PNG exports match the shape you see on screen.
+- **Settings follow the column's width.** Stone cards and the Band Settings columns are laid out by the width of the settings column, not the screen, so the narrow column on a computer shows one card per row and wide tablet screens get more.
+- The 2D blueprint starts at 2× zoom, and the ruler stays the same size on screen at any zoom.
+
 ## v1.4.5
 
 ### Improved
