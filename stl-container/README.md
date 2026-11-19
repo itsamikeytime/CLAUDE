@@ -6,6 +6,7 @@ A static web page that turns any closed STL into a two-part print: a hollow cont
 2. **Pick the cut plane**: an axis (X, Y or Z), a position along it, and two tilt angles. The teal side becomes the container and the orange side the lid; **Swap** flips them.
 3. **Set the walls and lid**:
    - *Minimum wall thickness*: the hollow is the largest space that keeps every wall at least this thick. It doesn't copy the outer shape, it just fills all the room it can.
+   - *Inside surface*: **Follow outside** keeps the hollow as large as possible, so the inside mirrors the outside's bumps and folds. **Smooth** rolls a ball of the chosen size around the inside and keeps only the space it can reach, giving a rounded, bowl-like inside. A bigger ball is smoother but leaves thicker walls in places; walls never go below the minimum either way.
    - *Lid plug depth*: how far the lid's plug reaches into the container.
    - *Lid clearance*: how much smaller than the opening the plug is, on every side, so it fits after printing.
    - *Detail*: finer is more accurate but slower.
@@ -18,6 +19,7 @@ A static web page that turns any closed STL into a two-part print: a hollow cont
 - A voxel distance field measures how far each point inside the model is from its surface. Points near the wall-thickness level get exact distances (via a BVH), then the hollow is the surface at that distance (`Manifold.levelSet`). Pockets that don't reach the opening are dropped so no sealed air bubbles are left behind.
 - Walls are checked against the true surface. Cells the surface passes through count as wall, so folds and slots thinner than the grid are respected, and the hollow is pulled in by a small margin tied to the grid size. Walls come out at or slightly above the minimum you set.
 - The heavy work runs in a background worker (`worker.js`) so the page stays responsive; if a host blocks the worker it runs on the page instead.
+- Smooth inside: the hollow is shrunk by the ball's radius (where the ball's centre can go), grown back by the same radius (everywhere the ball can reach), lightly blurred to round the seams between ball positions, and held a tenth of the radius inside that sweep. A final check against the wall limit guarantees the minimum thickness.
 - The plug's outline is the opening narrowed to whatever still fits at every depth it reaches, so it slides straight in, then shrunk by the clearance and extruded onto the lid.
 
 Libraries (loaded from jsDelivr): [three.js](https://threejs.org), [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh), [manifold-3d](https://github.com/elalish/manifold).

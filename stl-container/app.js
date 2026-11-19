@@ -73,7 +73,7 @@ const state = {
   frac: 0.65,
   tiltA: 0, tiltB: 0,
   swapped: false,
-  wall: 2, plug: 5, clearance: 0.2, res: 140,
+  wall: 2, plug: 5, clearance: 0.2, res: 140, smooth: false, smoothR: 12,
   result: null,          // { container: Float32Array, lid: Float32Array, M, Minv, info }
   busy: false,
 };
@@ -172,6 +172,9 @@ function setModel(geometry, name) {
 
   state.positions = new Float32Array(g.attributes.position.array);
   state.radius = g.boundingSphere.radius;
+  // Default smoothing ball: about a tenth of the model's largest size.
+  state.smoothR = Math.max(2, Math.min(50, Math.round(Math.max(s.x, s.y, s.z) / 10)));
+  $('smoothR').value = state.smoothR; $('smoothNum').value = state.smoothR;
   state.name = name.replace(/\.stl$/i, '');
   clearResult();
 
@@ -257,6 +260,15 @@ function settingsChanged() { if (state.result) clearResult(); }
 bindPair('tiltA', 'tiltANum', 'tiltA', planeChanged);
 bindPair('tiltB', 'tiltBNum', 'tiltB', planeChanged);
 bindPair('wall', 'wallNum', 'wall', settingsChanged);
+bindPair('smoothR', 'smoothNum', 'smoothR', settingsChanged);
+for (const b of $('inside').querySelectorAll('button')) {
+  b.addEventListener('click', () => {
+    state.smooth = b.dataset.smooth === '1';
+    for (const o of $('inside').querySelectorAll('button')) o.setAttribute('aria-pressed', String(o === b));
+    $('smoothBox').classList.toggle('hidden', !state.smooth);
+    settingsChanged();
+  });
+}
 bindPair('plug', 'plugNum', 'plug', settingsChanged);
 bindPair('clear', 'clearNum', 'clearance', settingsChanged);
 
@@ -327,7 +339,7 @@ $('make').addEventListener('click', async () => {
     }
 
     const t0 = performance.now();
-    const opts = { wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res };
+    const opts = { wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res, smooth: state.smooth, smoothRadius: state.smoothR };
     let r = await runInWorker(pos, opts);
     if (!r) r = await runOnPage(pos, opts);
     const { container, lid } = r;
@@ -429,6 +441,7 @@ function buildResultMeshes() {
     `<span>Hollow inside</span><b>${ml(i.cavityVolume)}</b>` +
     `<span>Container material</span><b>${ml(i.containerVolume)}</b>` +
     `<span>Lid material</span><b>${ml(i.lidVolume)}</b>` +
+    `<span>Inside surface</span><b>${i.smoothRadius ? `Smooth (${i.smoothRadius} mm ball)` : 'Follows outside'}</b>` +
     `<span>Plug depth</span><b>${i.plugDepth.toFixed(1)} mm</b>` +
     `<span>Accuracy</span><b>${i.gridSpacing.toFixed(2)} mm grid · ${r.seconds.toFixed(1)} s</b>`;
 }

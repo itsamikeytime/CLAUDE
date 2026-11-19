@@ -164,6 +164,18 @@
       <input type="range" id="wall" min="0.4" max="10" step="0.1" value="2">
     </label>
     <p class="hint">The hollow grows as large as it can while keeping every wall at least this thick.</p>
+    <span style="font-weight:500">Inside surface</span>
+    <div class="seg" id="inside" style="margin-top:6px">
+      <button data-smooth="0" aria-pressed="true">Follow outside</button>
+      <button data-smooth="1" aria-pressed="false">Smooth</button>
+    </div>
+    <div id="smoothBox" class="hidden">
+      <label class="row"><span>Smoothness</span>
+        <span class="num"><input type="number" id="smoothNum" step="1" min="2" value="12"> mm</span>
+        <input type="range" id="smoothR" min="2" max="50" step="1" value="12">
+      </label>
+      <p class="hint">Size of a ball rolled around the inside. Bigger gives a rounder, more bowl-like inside but thicker walls in places; walls never go below the minimum.</p>
+    </div>
     <label class="row"><span>Lid plug depth</span>
       <span class="num"><input type="number" id="plugNum" step="0.5" min="0" value="5"> mm</span>
       <input type="range" id="plug" min="0" max="30" step="0.5" value="5">

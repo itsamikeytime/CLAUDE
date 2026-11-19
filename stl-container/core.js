@@ -128,6 +128,36 @@ function voxelizeInside(positions, ox, oy, oz, h, nx, ny, nz) {
   return inside;
 }
 
+// Separable Gaussian blur (sigma in cells) of the bottom `kLimit` layers of a grid, in place.
+function blur3d(f, _nx, _ny, kLimit, nx, ny, nz, sigma) {
+  const r = Math.max(1, Math.min(40, Math.ceil(2.5 * sigma)));
+  const w = new Float64Array(2 * r + 1);
+  let sum = 0;
+  for (let i = -r; i <= r; i++) { w[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma)); sum += w[i + r]; }
+  for (let i = 0; i < w.length; i++) w[i] /= sum;
+  const kl = Math.min(nz, kLimit);
+  const n = Math.max(nx, ny, nz);
+  const line = new Float64Array(n), out = new Float64Array(n);
+  const pass = (count, len, stride, base) => {
+    for (let q = 0; q < count; q++) {
+      const b = base(q);
+      for (let i = 0; i < len; i++) line[i] = f[b + i * stride];
+      for (let i = 0; i < len; i++) {
+        let acc = 0;
+        for (let t = -r; t <= r; t++) {
+          const j = i + t < 0 ? 0 : i + t >= len ? len - 1 : i + t; // clamp at the edges
+          acc += w[t + r] * line[j];
+        }
+        out[i] = acc;
+      }
+      for (let i = 0; i < len; i++) f[b + i * stride] = out[i];
+    }
+  };
+  pass(kl * ny, nx, 1, (q) => q * nx);                                            // x lines
+  pass(kl * nx, ny, nx, (q) => Math.floor(q / nx) * nx * ny + (q % nx));          // y lines
+  pass(nx * ny, kl, nx * ny, (q) => q);                                           // z lines (bottom part only)
+}
+
 // Mark every cell a triangle passes through, by sampling each triangle at half-cell spacing.
 function markSurfaceCells(positions, ox, oy, oz, h, nx, ny, nz) {
   const out = new Uint8Array(nx * ny * nz);
@@ -214,8 +244,11 @@ export async function makeContainerAndLid(deps, positions, opts) {
   const p = new Vector3();
   const target = { point: new Vector3(), distance: 0, faceIndex: 0 };
   const band = 2 * h; // rough distances are within about 1.7 cells of the truth
+  const smoothR = opts.smooth ? Math.max(h, opts.smoothRadius || 8) : 0;
+  // Only the container side matters (plus the reach of the smoothing ball above the cut).
+  const kMax = Math.min(nz, Math.ceil((smoothR + 4 * h - oz) / h));
   let refined = 0;
-  for (let k = 0; k < nz; k++) {
+  for (let k = 0; k < kMax; k++) {
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
       const idx = (k * ny + j) * nx + i;
       let sign = 1;
@@ -238,12 +271,12 @@ export async function makeContainerAndLid(deps, positions, opts) {
     if (k % 16 === 0) await progress(`Refining wall distances… ${Math.round(100 * k / nz)}%`);
   }
 
-  const sample = (x, y, z) => {
+  const trilinear = (f, x, y, z, outside) => {
     const fx = (x - ox) / h - 0.5, fy = (y - oy) / h - 0.5, fz = (z - oz) / h - 0.5;
     const i = Math.floor(fx), j = Math.floor(fy), k = Math.floor(fz);
-    if (i < 0 || j < 0 || k < 0 || i >= nx - 1 || j >= ny - 1 || k >= nz - 1) return -h;
+    if (i < 0 || j < 0 || k < 0 || i >= nx - 1 || j >= ny - 1 || k >= nz - 1) return outside;
     const tx = fx - i, ty = fy - j, tz = fz - k;
-    const at = (a, b, c) => field[((k + c) * ny + (j + b)) * nx + (i + a)];
+    const at = (a, b, c) => f[((k + c) * ny + (j + b)) * nx + (i + a)];
     const c00 = at(0, 0, 0) * (1 - tx) + at(1, 0, 0) * tx;
     const c10 = at(0, 1, 0) * (1 - tx) + at(1, 1, 0) * tx;
     const c01 = at(0, 0, 1) * (1 - tx) + at(1, 0, 1) * tx;
@@ -251,12 +284,65 @@ export async function makeContainerAndLid(deps, positions, opts) {
     return (c00 * (1 - ty) + c10 * ty) * (1 - tz) + (c01 * (1 - ty) + c11 * ty) * tz;
   };
 
-  await progress('Shaping the hollow…');
+  // The surface is simplified afterwards; pad the level by the same tolerance so walls never get
+  // thinner. The extra margin covers folds narrower than a grid cell, which the grid can't see
+  // between its sample points (checked against exact distances on detailed models).
+  const tol = Math.min(0.05, 0.15 * h);
+  const level = wall + tol + (opts.margin ?? (wall < h ? 0.65 : 0.5)) * h;
+  const distAt = (x, y, z) => trilinear(field, x, y, z, -h);
+
   // Only build the cavity below the cut (plus a sliver above it so the opening is clean).
   const lb = { min: [ox, oy, oz], max: [ox + nx * h, oy + ny * h, Math.min(oz + nz * h, 2 * h)] };
-  // The surface is simplified afterwards; pad the level by the same tolerance so walls never get thinner.
-  const tol = Math.min(0.05, 0.15 * h);
-  const dense = keep(wasm.Manifold.levelSet(([x, y, z]) => sample(x, y, z), lb, h, wall + tol + (opts.margin ?? (wall < h ? 0.65 : 0.5)) * h));
+  let dense;
+  if (!smoothR) {
+    await progress('Shaping the hollow…');
+    dense = keep(wasm.Manifold.levelSet(([x, y, z]) => distAt(x, y, z), lb, h, level));
+  } else {
+    // Smooth inside: roll a ball of radius R around the hollow and keep only where it reaches.
+    // Step 1: the space the ball's centre can reach (the hollow shrunk by R).
+    await progress('Smoothing the inside: finding where the ball fits…');
+    const coreTop = Math.min(oz + nz * h, 2 * h + smoothR + 2 * h);
+    const coreBounds = { min: [ox, oy, oz], max: [ox + nx * h, oy + ny * h, coreTop] };
+    const core = keep(wasm.Manifold.levelSet(([x, y, z]) => distAt(x, y, z) - smoothR, coreBounds, h, level));
+    if (core.isEmpty()) {
+      throw new Error(`A ${smoothR} mm smoothing ball doesn't fit inside this part. Try a smaller smoothness, a thinner wall, or move the cut.`);
+    }
+    // Step 2: grow it back by R. Rough distances from a grid, exact ones near the surface.
+    await progress('Smoothing the inside: rolling the ball…');
+    const coreTri = manifoldToTriangles(core);
+    const coreGeom = new BufferGeometry();
+    coreGeom.setAttribute('position', new BufferAttribute(coreTri, 3));
+    const coreBvh = new MeshBVH(coreGeom);
+    const reach = new Float64Array(N);
+    for (let i = 0; i < N; i++) reach[i] = field[i] >= level + smoothR ? 0 : 1e20;
+    edt3d(reach, nx, ny, nz);
+    for (let i = 0; i < N; i++) reach[i] = field[i] >= level + smoothR ? field[i] - level : smoothR - Math.sqrt(reach[i]) * h;
+    const t2 = { point: new Vector3(), distance: 0, faceIndex: 0 };
+    const kTop = Math.min(nz, Math.ceil((3 * h - oz) / h));
+    for (let k = 0; k < kTop; k++) {
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const idx = (k * ny + j) * nx + i;
+        if (field[idx] >= level + smoothR || Math.abs(reach[idx]) > 2 * h) continue;
+        p.set(ox + (i + 0.5) * h, oy + (j + 0.5) * h, oz + (k + 0.5) * h);
+        const r = coreBvh.closestPointToPoint(p, t2);
+        if (r) reach[idx] = smoothR - r.distance;
+      }
+      if (k % 16 === 0) await progress(`Smoothing the inside: rolling the ball… ${Math.round(100 * k / kTop)}%`);
+    }
+    // Blur the ball's sweep a little to round off the creases where neighbouring ball
+    // positions meet. Blurring can push the surface towards a wall in places; the wall
+    // check below stops it there.
+    await progress('Smoothing the inside: blending…');
+    blur3d(reach, nx, ny, kTop + Math.ceil(smoothR / h) + 2, nx, ny, nz, Math.max(h, 0.3 * smoothR) / h);
+    const ballAt = (x, y, z) => trilinear(reach, x, y, z, -smoothR);
+    await progress('Smoothing the inside: shaping the hollow…');
+    // The ball's sweep never reaches past the walls, but keep the wall check as a backstop.
+    // Keep the blended surface a little inside the ball's sweep, so it rarely meets the wall
+    // limit (where the outside's texture would show through). The wall check is the backstop.
+    const inset = 0.1 * smoothR;
+    dense = keep(wasm.Manifold.levelSet(([x, y, z]) => Math.min(ballAt(x, y, z) - inset, distAt(x, y, z) - level), lb, h, 0));
+    coreGeom.dispose();
+  }
   const rawCavity = keep(dense.simplify(tol));
   const capped = keep(rawCavity.trimByPlane([0, 0, -1], -h)); // keep z <= h
 
@@ -311,7 +397,7 @@ export async function makeContainerAndLid(deps, positions, opts) {
   const result = {
     container, lid,
     info: {
-      gridSpacing: h, refined, mergedShells: merged, plugDepth: plugInfo.depth,
+      gridSpacing: h, refined, mergedShells: merged, smoothRadius: smoothR, plugDepth: plugInfo.depth,
       cavityVolume: cavity.volume(), modelVolume: model.volume(),
       containerVolume: container.volume(), lidVolume: lid.volume(),
     },
