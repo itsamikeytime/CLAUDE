@@ -146,9 +146,10 @@ function placeDowels(wasm, topHalf, plugOutline, o) {
       const pinRegion = t(plugOutline.offset(-(r + 0.8), 'Round'));
       if (pinRegion.isEmpty()) continue;
       const top = L + 0.5 + o.wall; // hole depth plus material left above it
+      const z0 = (o.zBase || 0) + 0.02;
       let cap = null;
       for (let i = 0; i <= 8; i++) {
-        const sl = t(topHalf.slice(0.02 + (top - 0.02) * i / 8));
+        const sl = t(topHalf.slice(z0 + (top - 0.02) * i / 8));
         cap = cap ? t(cap.intersect(sl)) : sl;
       }
       const capRegion = t(cap.offset(-(holeR + o.wall), 'Round'));
@@ -465,38 +466,73 @@ export async function makeContainerAndLid(deps, positions, opts) {
   if (hasPlug) plugInfo = { depth };
   if (opts.splitLid && hasPlug) {
     // Two-part lid: the top prints flat on its cut face, the insert prints standing on its
-    // bottom with dowel pins pointing up. Pins fit into holes drilled up into the top.
+    // bottom with dowel pins pointing up. The insert reaches down into the container (the plug)
+    // and up into a matching pocket in the lid top; pins go further up into holes above the
+    // pocket. The clearance applies sideways and on top: the insert's upper part is shorter
+    // than the pocket, and the pins are shorter than their holes, by the clearance.
     await progress('Splitting the lid and placing dowels…');
-    const insertBody = keep(plugOutline.extrude(depth).translate([0, 0, -depth]));
+    const up = Math.max(0, opts.insertUp ?? 3);
+    const ins = [], cuts = [];
+    // Where the lid top has room for the pocket: every slice up to the pocket's ceiling plus a
+    // wall's worth of material, shrunk by the wall thickness.
+    let capInset = null;
+    if (up > 0) {
+      const top = up + wall;
+      let cap = null;
+      for (let i = 0; i <= 10; i++) {
+        const sl = topHalf.slice(0.02 + (top - 0.02) * i / 10); sliceGarbage.push(sl);
+        cap = cap ? cap.intersect(sl) : sl; sliceGarbage.push(cap);
+      }
+      capInset = cap.offset(-wall, 'Round'); sliceGarbage.push(capInset);
+    }
     // A cut can cross the model more than once, giving several separate insert pieces;
-    // each piece gets its own pins.
+    // each piece gets its own pocket and pins.
     const pieces = plugOutline.decompose();
-    const pins = [], holes = [];
-    dowelInfo = { count: 0, pieces: pieces.length, piecesWithout: 0, diameter: Infinity, length: Infinity };
+    dowelInfo = { count: 0, pieces: pieces.length, piecesWithout: 0, diameter: Infinity, length: Infinity, up: 0 };
     for (const piece of pieces) {
-      const placed = placeDowels(wasm, topHalf, piece, {
-        diameter: opts.dowelDiameter || 4, length: opts.dowelLength || 5,
+      ins.push(keep(piece.extrude(depth).translate([0, 0, -depth])));
+      let upper = null, zTop = 0;
+      if (capInset && up - clearance > 0.2) {
+        const pocket = piece.offset(clearance, 'Round').intersect(capInset);
+        upper = pocket.offset(-clearance, 'Round');
+        if (upper.area() > 1e-3) {
+          cuts.push(keep(pocket.extrude(up + 1).translate([0, 0, -1])));
+          ins.push(keep(upper.extrude(up - clearance + 0.01).translate([0, 0, -0.01])));
+          zTop = up - clearance;
+          dowelInfo.up = up;
+        } else { upper.delete(); upper = null; }
+        pocket.delete();
+      }
+      const placed = placeDowels(wasm, topHalf, upper || piece, {
+        diameter: opts.dowelDiameter || 4, length: opts.dowelLength || 5, zBase: upper ? up : 0,
         clearance, wall: Math.max(1, Math.min(wall, 2)), maxCount: opts.dowelCount || 3,
       });
+      if (upper) upper.delete();
       piece.delete();
       if (!placed.points.length) { dowelInfo.piecesWithout++; continue; }
       const r = placed.diameter / 2, L = placed.length;
+      const zCeil = upper ? up : 0; // where the holes start in the lid top
       dowelInfo.count += placed.points.length;
       dowelInfo.diameter = Math.min(dowelInfo.diameter, placed.diameter);
       dowelInfo.length = Math.min(dowelInfo.length, placed.length);
       for (const [x, y] of placed.points) {
-        pins.push(keep(wasm.Manifold.cylinder(L + 0.5, r, r, 32).translate([x, y, -0.5])));
-        holes.push(keep(wasm.Manifold.cylinder(L + 0.5 + 1, r + clearance, r + clearance, 32).translate([x, y, -1])));
+        // Pins are the dowel length minus the clearance, standing on the insert's (already
+        // shortened) top; holes are the dowel length plus 0.5 mm for glue.
+        const pinH = Math.max(0.5, L - clearance);
+        ins.push(keep(wasm.Manifold.cylinder(pinH + 0.5, r, r, 32).translate([x, y, zTop - 0.5])));
+        cuts.push(keep(wasm.Manifold.cylinder(L + 0.5 + 1, r + clearance, r + clearance, 32).translate([x, y, zCeil - 1])));
       }
     }
     if (!dowelInfo.count) { dowelInfo.diameter = 0; dowelInfo.length = 0; }
-    if (pins.length) {
-      lidInsert = wasm.Manifold.union([insertBody, ...pins]);
-      lidTop = topHalf.subtract(keep(wasm.Manifold.union(holes)));
-    } else {
-      lidInsert = insertBody.translate([0, 0, 0]);
-      lidTop = topHalf.translate([0, 0, 0]);
+    {
+      // Drop zero-volume slivers the booleans can leave behind.
+      const whole = keep(ins.length === 1 ? ins[0].translate([0, 0, 0]) : wasm.Manifold.union(ins));
+      const bits = whole.decompose();
+      const real = bits.filter((m) => m.volume() > 1e-3);
+      lidInsert = real.length === bits.length ? whole.translate([0, 0, 0]) : wasm.Manifold.union(real);
+      for (const m of bits) m.delete();
     }
+    lidTop = cuts.length ? topHalf.subtract(keep(wasm.Manifold.union(cuts))) : topHalf.translate([0, 0, 0]);
   } else if (hasPlug) {
     const plug = keep(plugOutline.extrude(depth + 0.5 * h).translate([0, 0, -depth]));
     lid = topHalf.add(plug);

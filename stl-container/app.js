@@ -74,7 +74,7 @@ const state = {
   frac: 0.65,
   tiltA: 0, tiltB: 0,
   swapped: false,
-  wall: 2, plug: 5, clearance: 0.2, res: 140, smooth: false, smoothR: 12, splitLid: false, dowelD: 4, dowelL: 5,
+  wall: 2, plug: 5, clearance: 0.2, res: 140, smooth: false, smoothR: 12, splitLid: false, dowelD: 4, dowelL: 5, insertUp: 3,
   result: null,          // { container: Float32Array, lid: Float32Array, M, Minv, info }
   busy: false,
 };
@@ -183,6 +183,8 @@ function setModel(geometry, name) {
   state.dowelL = Math.max(4, Math.min(10, Math.round(state.dowelD * 1.5)));
   $('dowelD').value = state.dowelD; $('dowelDNum').value = state.dowelD;
   $('dowelL').value = state.dowelL; $('dowelLNum').value = state.dowelL;
+  state.insertUp = Math.max(2, Math.min(6, Math.round(Math.max(s.x, s.y, s.z) / 30 * 2) / 2));
+  $('insertUp').value = state.insertUp; $('insertUpNum').value = state.insertUp;
   state.name = name.replace(/\.stl$/i, '');
   clearResult();
 
@@ -270,6 +272,7 @@ bindPair('tiltB', 'tiltBNum', 'tiltB', planeChanged);
 bindPair('wall', 'wallNum', 'wall', settingsChanged);
 bindPair('smoothR', 'smoothNum', 'smoothR', settingsChanged);
 bindPair('dowelD', 'dowelDNum', 'dowelD', settingsChanged);
+bindPair('insertUp', 'insertUpNum', 'insertUp', settingsChanged);
 bindPair('dowelL', 'dowelLNum', 'dowelL', settingsChanged);
 $('splitLid').addEventListener('change', () => {
   state.splitLid = $('splitLid').checked;
@@ -355,7 +358,7 @@ $('make').addEventListener('click', async () => {
 
     const t0 = performance.now();
     const opts = { wall: state.wall, clearance: state.clearance, lipDepth: state.plug, resolution: state.res, smooth: state.smooth, smoothRadius: state.smoothR,
-      splitLid: state.splitLid, dowelDiameter: state.dowelD, dowelLength: state.dowelL };
+      splitLid: state.splitLid, dowelDiameter: state.dowelD, dowelLength: state.dowelL, insertUp: state.insertUp };
     let r = await runInWorker(pos, opts);
     if (!r) r = await runOnPage(pos, opts);
     state.result = { ...r.parts, M, Minv, info: r.info, seconds: (performance.now() - t0) / 1000 };
@@ -470,7 +473,7 @@ function buildResultMeshes() {
     `<span>Lid material</span><b>${ml(i.lidVolume)}</b>` +
     `<span>Inside surface</span><b>${i.smoothRadius ? `Smooth (${i.smoothRadius} mm ball)` : 'Follows outside'}</b>` +
     `<span>Plug depth</span><b>${i.plugDepth.toFixed(1)} mm</b>` +
-    (i.dowels ? `<span>Dowels</span><b>${i.dowels.count ? `${i.dowels.count} × ${i.dowels.diameter.toFixed(1)} mm, ${i.dowels.length.toFixed(1)} mm long` : 'none (glue flat)'}</b>` + (i.dowels.pieces > 1 ? `<span>Insert pieces</span><b>${i.dowels.pieces}</b>` : '') : '') +
+    (i.dowels ? `<span>Dowels</span><b>${i.dowels.count ? `${i.dowels.count} × ${i.dowels.diameter.toFixed(1)} mm, ${Math.max(0.5, i.dowels.length - state.clearance).toFixed(1)} mm long` : 'none (glue flat)'}</b>` + `<span>Insert into lid</span><b>${i.dowels.up ? `${(i.dowels.up - state.clearance).toFixed(1)} mm (pocket ${i.dowels.up.toFixed(1)} mm)` : 'none'}</b>` + (i.dowels.pieces > 1 ? `<span>Insert pieces</span><b>${i.dowels.pieces}</b>` : '') : '') +
     `<span>Accuracy</span><b>${i.gridSpacing.toFixed(2)} mm grid · ${r.seconds.toFixed(1)} s</b>`;
 }
 

@@ -189,6 +189,11 @@
     <label class="check"><input type="checkbox" id="splitLid">
       <span>Print the lid in two parts<br><span class="hint" style="margin:0">The lid top prints flat on its cut face, so its outside never touches the bed. The plug becomes a separate insert with dowel pins that glue into holes in the top.</span></span></label>
     <div id="dowelBox" class="hidden">
+      <label class="row"><span>Insert reaches into lid</span>
+        <span class="num"><input type="number" id="insertUpNum" step="0.5" min="0" value="3"> mm</span>
+        <input type="range" id="insertUp" min="0" max="20" step="0.5" value="3">
+      </label>
+      <p class="hint">The insert rises into a pocket in the lid top, like the plug goes into the container. The lid clearance applies here too: the insert is that much narrower than the pocket and that much shorter, and so are the pins.</p>
       <label class="row"><span>Dowel diameter</span>
         <span class="num"><input type="number" id="dowelDNum" step="0.5" min="1.5" value="4"> mm</span>
         <input type="range" id="dowelD" min="1.5" max="12" step="0.5" value="4">
