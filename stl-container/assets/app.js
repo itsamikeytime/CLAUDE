@@ -209,7 +209,11 @@ function setModel(geometry, name) {
 
 function fitView(margin = 1.15) {
   const r = state.radius || 50;
-  const dist = r / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * margin;
+  // Fit the model in whichever of the view's height or width is tighter, so tall, narrow
+  // views (a split screen in portrait) don't crop it at the sides.
+  const vHalf = THREE.MathUtils.degToRad(camera.fov / 2);
+  const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+  const dist = r / Math.sin(Math.min(vHalf, hHalf)) * margin;
   camera.position.set(dist * 0.62, -dist * 0.62, dist * 0.48);
   camera.near = r / 100; camera.far = r * 100;
   camera.updateProjectionMatrix();
@@ -630,8 +634,13 @@ const root = document.documentElement;
 const postureFolded = () =>
   (navigator.devicePosture && navigator.devicePosture.type === 'folded') ||
   matchMedia('(device-posture: folded)').matches;
+// Screens the size of a foldable's inner display (touch, both sides roughly 540–1000 px, e.g.
+// 669 × 867 or 951 × 585) get the split automatically. Phones, iPads and desktop windows don't.
+const foldableInner = matchMedia('(pointer: coarse) and (min-width: 540px) and (min-height: 540px) and (max-width: 1000px) and (max-height: 1000px)');
+let splitPref = null; // 'on' / 'off' once the viewer uses the Split view button
+try { splitPref = localStorage.getItem('splitPref'); } catch (e) {}
 function detectDual() {
-  let mode = null;
+  let mode = null, native = true;
   const segs = window.viewport && window.viewport.segments;
   if (segs && segs.length > 1) {
     mode = segs[0].width < window.innerWidth - 1 ? 'h' : 'v';
@@ -643,12 +652,32 @@ function detectDual() {
     // Half-open but no segment info: a book-style fold runs down the middle in portrait
     // and across the middle in landscape.
     mode = window.innerWidth < window.innerHeight ? 'h' : 'v';
+  } else {
+    native = false;
+    const roomy = window.innerWidth >= 560 && window.innerHeight >= 420;
+    const want = location.hash === '#duo' || (splitPref ? splitPref === 'on' : foldableInner.matches);
+    if (want && (roomy || location.hash === '#duo')) mode = 'h';
+    if (location.hash === '#duo' && window.innerWidth < window.innerHeight && !roomy) mode = 'v';
   }
-  if (!mode && location.hash === '#duo') mode = window.innerWidth >= window.innerHeight ? 'h' : 'v';
+  const was = root.className;
   root.classList.toggle('dual', !!mode);
   root.classList.toggle('dual-h', mode === 'h');
   root.classList.toggle('dual-v', mode === 'v');
+  root.classList.toggle('dual-native', !!mode && native);
+  const btn = $('splitToggle');
+  btn.setAttribute('aria-pressed', String(!!mode));
+  $('splitLabel').textContent = mode ? 'Single view' : 'Split view';
+  // The view changed shape: re-frame the model once the new size has been applied.
+  if (root.className !== was && state.positions) {
+    requestAnimationFrame(() => { resize(); fitView(resultGroup.visible ? 1.5 : 1.15); });
+  }
 }
+$('splitToggle').addEventListener('click', () => {
+  splitPref = root.classList.contains('dual') ? 'off' : 'on';
+  try { localStorage.setItem('splitPref', splitPref); } catch (e) {}
+  detectDual();
+});
+if (foldableInner.addEventListener) foldableInner.addEventListener('change', detectDual);
 try { if (localStorage.getItem('duoSwapped') === '1') root.classList.add('swapped'); } catch (e) {}
 $('duoSwap').addEventListener('click', () => {
   const on = root.classList.toggle('swapped');
