@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import Module from 'manifold-3d';
-import { makeContainerAndLid, manifoldToTriangles, trianglesToSTL } from './core.js?v=20261119-2';
+import { makeContainerAndLid, manifoldToTriangles, trianglesToSTL } from './core.js?v=20261119-3';
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -28,6 +28,10 @@ const canvas = $('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.localClippingEnabled = true;
+// If the browser drops the 3D context (memory pressure on phones), let three.js restore it and
+// redraw at the current size.
+canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
+canvas.addEventListener('webglcontextrestored', () => resize());
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 10000);
 camera.up.set(0, 0, 1); // STL files are usually Z-up
@@ -43,6 +47,9 @@ key.position.set(1, 2, 3);
 
 function resize() {
   const r = canvas.parentElement.getBoundingClientRect();
+  // Keep the drawing buffer within what every phone GPU can handle (iOS goes blank beyond that).
+  const longest = Math.max(1, r.width, r.height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2, 4096 / longest));
   renderer.setSize(r.width, r.height, false);
   camera.aspect = r.width / Math.max(1, r.height);
   camera.updateProjectionMatrix();
@@ -411,7 +418,7 @@ function startWorker() {
   if (workerReady) return workerReady;
   workerReady = new Promise((resolve) => {
     let w;
-    try { w = new Worker(new URL('./worker.js?v=20261119-2', import.meta.url), { type: 'module' }); } catch (e) { resolve(null); return; }
+    try { w = new Worker(new URL('./worker.js?v=20261119-3', import.meta.url), { type: 'module' }); } catch (e) { resolve(null); return; }
     const timer = setTimeout(() => { w.terminate(); resolve(null); }, 30000);
     w.onmessage = (e) => { if (e.data.type === 'ready') { clearTimeout(timer); resolve(w); } };
     w.onerror = (e) => { e.preventDefault(); clearTimeout(timer); w.terminate(); resolve(null); };
@@ -660,6 +667,16 @@ function detectDual() {
     if (location.hash === '#duo' && window.innerWidth < window.innerHeight && !roomy) mode = 'v';
   }
   const was = root.className;
+  // Real segments: size the halves from them, with the hinge gap between. Otherwise even halves.
+  const rs = root.style;
+  if (segs && segs.length > 1 && mode) {
+    const [a, b] = segs;
+    const px = (v) => `${Math.max(0, Math.round(v))}px`;
+    if (mode === 'h') { rs.setProperty('--seg0', px(a.width)); rs.setProperty('--hinge', px(b.x - (a.x + a.width))); rs.setProperty('--seg1', px(b.width)); }
+    else { rs.setProperty('--seg0', px(a.height)); rs.setProperty('--hinge', px(b.y - (a.y + a.height))); rs.setProperty('--seg1', px(b.height)); }
+  } else {
+    for (const v of ['--seg0', '--hinge', '--seg1']) rs.removeProperty(v);
+  }
   root.classList.toggle('dual', !!mode);
   root.classList.toggle('dual-h', mode === 'h');
   root.classList.toggle('dual-v', mode === 'v');
@@ -668,8 +685,9 @@ function detectDual() {
   btn.setAttribute('aria-pressed', String(!!mode));
   $('splitLabel').textContent = mode ? 'Single view' : 'Split view';
   // The view changed shape: re-frame the model once the new size has been applied.
-  if (root.className !== was && state.positions) {
-    requestAnimationFrame(() => { resize(); fitView(resultGroup.visible ? 1.5 : 1.15); });
+  if (root.className !== was) {
+    window.scrollTo(0, 0); // don't leave the page scrolled from the previous layout
+    requestAnimationFrame(() => { resize(); if (state.positions) fitView(resultGroup.visible ? 1.5 : 1.15); });
   }
 }
 $('splitToggle').addEventListener('click', () => {
@@ -685,6 +703,8 @@ $('duoSwap').addEventListener('click', () => {
 });
 // Folding or unfolding changes the viewport without a reload; re-check on every signal.
 window.addEventListener('resize', detectDual);
+// Nothing on the page should ever scroll sideways; undo any leftover offset after a layout change.
+window.addEventListener('scroll', () => { if (window.scrollX) window.scrollTo(0, window.scrollY); }, { passive: true });
 window.addEventListener('orientationchange', detectDual);
 window.addEventListener('hashchange', detectDual);
 if (window.visualViewport) window.visualViewport.addEventListener('resize', detectDual);

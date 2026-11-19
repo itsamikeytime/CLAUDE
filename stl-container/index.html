@@ -43,6 +43,8 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
+  html { overflow-x: clip; }
+  main, aside { min-width: 0; }
   body {
     background: var(--bg); color: var(--ink);
     font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -157,15 +159,14 @@
   html.dual #duoSwap { display: inline-flex; }
   html.dual-v #duoSwap svg { transform: rotate(90deg); }
 
-  /* Dual-screen devices (a fold or hinge splits the screen): the 3D view fills one screen and
-     the settings the other, with nothing drawn across the hinge. The env() values come from the
-     browser on such devices; the fallbacks are an even split, used by the #duo preview. */
+  /* Split layout: the 3D view on one half and the settings on the other. Even halves by default;
+     when the browser reports the real screen segments, the script measures them and sets
+     --seg0 / --hinge / --seg1 so nothing lands on the hinge. (CSS env(viewport-segment-*) isn't
+     used: Safari defines it even without a fold, which made the layout wider than the screen.) */
   html.dual-h body {
-    grid-template-columns:
-      env(viewport-segment-width 0 0, 50dvw)
-      calc(env(viewport-segment-left 1 0, 50dvw) - env(viewport-segment-right 0 0, 50dvw))
-      env(viewport-segment-width 1 0, 50dvw);
+    grid-template-columns: var(--seg0, minmax(0, 1fr)) var(--hinge, 0px) var(--seg1, minmax(0, 1fr));
     grid-template-rows: 100%; display: grid; height: 100vh; height: 100dvh;
+    overflow: hidden; width: 100%;
   }
   html.dual-h main { grid-column: 1; grid-row: 1; position: relative; height: auto; top: auto; }
   html.dual-h aside { grid-column: 3; grid-row: 1; border: 0; border-left: 1px solid var(--line); overflow-y: auto; }
@@ -173,16 +174,14 @@
   html.dual-h.swapped aside { grid-column: 1; border-left: 0; border-right: 1px solid var(--line); }
   html.dual-v body {
     grid-template-columns: 100%;
-    grid-template-rows:
-      env(viewport-segment-height 0 0, 50dvh)
-      calc(env(viewport-segment-top 0 1, 50dvh) - env(viewport-segment-bottom 0 0, 50dvh))
-      env(viewport-segment-height 0 1, 50dvh);
-    display: grid; height: 100vh; height: 100dvh;
+    grid-template-rows: var(--seg0, minmax(0, 1fr)) var(--hinge, 0px) var(--seg1, minmax(0, 1fr));
+    display: grid; height: 100vh; height: 100dvh; overflow: hidden; width: 100%;
   }
   html.dual-v main { grid-row: 1; grid-column: 1; position: relative; height: auto; top: auto; }
   html.dual-v aside { grid-row: 3; grid-column: 1; border: 0; border-top: 1px solid var(--line); overflow-y: auto; }
   html.dual-v.swapped main { grid-row: 3; }
   html.dual-v.swapped aside { grid-row: 1; border-top: 0; border-bottom: 1px solid var(--line); }
+  html.dual { overflow: hidden; }
   html.dual aside { padding: 16px; }
   html.dual main, html.dual aside { min-width: 0; min-height: 0; }
   .hidden { display: none !important; }
@@ -347,6 +346,6 @@
   </div>
 </main>
 
-<script type="module" src="./assets/app.js?v=20261119-2"></script>
+<script type="module" src="./assets/app.js?v=20261119-3"></script>
 </body>
 </html>

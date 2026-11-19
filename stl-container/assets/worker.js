@@ -4,7 +4,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { MeshBVH } from 'https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.1/+esm';
 import Module from 'https://cdn.jsdelivr.net/npm/manifold-3d@3.5.5/manifold.js';
-import { makeContainerAndLid, manifoldToTriangles } from './core.js?v=20261119-2';
+import { makeContainerAndLid, manifoldToTriangles } from './core.js?v=20261119-3';
 
 let wasmPromise = null;
 function getWasm() {
