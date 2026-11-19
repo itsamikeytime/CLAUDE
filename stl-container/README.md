@@ -31,7 +31,22 @@ Libraries (loaded from jsDelivr): [three.js](https://threejs.org), [three-mesh-b
 
 ## Hosting
 
-It's plain static files (`index.html`, `app.js`, `core.js`, `worker.js`), so any static host works: GitHub Pages, Netlify, Cloudflare Pages, or your own server. It must be served over HTTP(S), not opened as a local `file://`, because it uses ES modules. To try it locally:
+The folder is ready to upload as-is to any static host (your own domain, GitHub Pages, Netlify, Cloudflare Pages):
+
+```
+index.html
+favicon.ico
+favicon.svg
+preview.jpg          link-preview image
+assets/app.js        page logic and 3D view
+assets/core.js       hollowing and lid geometry
+assets/worker.js     runs the geometry in the background
+assets/manifold.wasm geometry engine (a local copy, so it doesn't depend on the CDN)
+```
+
+three.js, three-mesh-bvh and the manifold-3d loader still come from jsDelivr. In `index.html`, change the `og:image` line to the full address of `preview.jpg` on your site so link previews show the image.
+
+It has to be served over HTTP(S), not opened as a local `file://`, because it uses ES modules and a worker. To try it locally:
 
 ```bash
 cd stl-container && python3 -m http.server 8000

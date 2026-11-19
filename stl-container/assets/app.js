@@ -14,7 +14,7 @@ function getWasm() {
   if (!wasmPromise) {
     // Use a copy of the engine served next to this page when there is one (some hosts
     // only allow scripts from the CDN); otherwise Module() fetches it from the CDN.
-    wasmPromise = fetch('./manifold.wasm')
+    wasmPromise = fetch(new URL('./manifold.wasm', import.meta.url))
       .then((r) => (r.ok && /wasm|octet/.test(r.headers.get('content-type') || '') ? r.arrayBuffer() : null))
       .catch(() => null)
       .then((bin) => Module(bin ? { wasmBinary: bin } : {}))
