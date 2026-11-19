@@ -4,7 +4,13 @@ A static web page that turns any closed STL into a two-part print: a hollow cont
 
 The page lays out as numbered steps: 1 Model and 2 Cut plane side by side, then 3 Container, 4 Lid, 5 Make and 6 Download.
 
-On dual-screen and folding devices that report their screen split to the browser (viewport segments), the 3D view takes one screen and the settings the other; a **Swap** button on the view switches them. Add `#duo` to the address to preview that layout on any screen.
+The layout is responsive CSS, with no device detection:
+- **Narrow screens** (phones, a foldable's outer screen, split-screen windows, under 600 px): the 3D view is pinned on top and the settings scroll underneath.
+- **600–899 px** (for example a foldable's inner screen in portrait, 669 px): same arrangement, and the settings panel switches to two columns through a container query.
+- **900 px and up**: settings beside the 3D view.
+- **Short landscape screens** (480 px tall or less, such as a folded phone turned sideways at 594 × 368): the screen is split in half, the 3D view on one side and the settings on the other.
+
+Folding and unfolding without a reload is handled: the 3D view resizes with its box, and the page re-checks on `resize`, `visualViewport` resize, `orientationchange` and posture changes. When the browser reports a fold (viewport segments, or device posture `folded`), the 3D view and settings go on opposite sides of it, and a **Swap** button on the view switches them. Add `#duo` to the address to preview that split layout on any screen.
 
 1. **Load an STL** (drag and drop, or pick a file). Everything runs in your browser; nothing is uploaded.
 2. **Pick the cut plane**: an axis (X, Y or Z), a position along it, and two tilt angles. The teal side becomes the container and the orange side the lid; **Swap** flips them.

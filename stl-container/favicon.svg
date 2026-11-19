@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#1d1f23"/>
-  <!-- lid, lifted off -->
-  <path d="M14 22c0-8 8-13 18-13s18 5 18 13z" fill="#e08a3c"/>
-  <rect x="20" y="22" width="24" height="5" rx="1.5" fill="#c9a227"/>
-  <!-- hollow container -->
-  <path d="M10 33h44c0 13-9 22-22 22S10 46 10 33z" fill="#2a8c96"/>
-  <path d="M16 33h32c0 9-7 16-16 16S16 42 16 33z" fill="#14474d"/>
+  <rect width="64" height="64" rx="14" fill="#141816"/>
+  <!-- lid (blue) and its insert (purple), lifted off -->
+  <path d="M14 22c0-8 8-13 18-13s18 5 18 13z" fill="#5b9bf0"/>
+  <rect x="20" y="22" width="24" height="5" rx="1.5" fill="#a688f0"/>
+  <!-- hollow container (green) -->
+  <path d="M10 33h44c0 13-9 22-22 22S10 46 10 33z" fill="#3fb27a"/>
+  <path d="M16 33h32c0 9-7 16-16 16S16 42 16 33z" fill="#1a4a33"/>
 </svg>

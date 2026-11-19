@@ -48,17 +48,20 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(canvas.parentElement);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 resize();
 
 function applyTheme() {
-  scene.background = new THREE.Color(css('--viewer') || '#e9e7e1');
-  containerMat.color.set(css('--container') || '#2a8c96');
-  lidMat.color.set(css('--lid') || '#e08a3c');
-  resContainerMat.color.set(css('--container') || '#2a8c96');
-  resLidMat.color.set(css('--lid') || '#e08a3c');
-  resInsertMat.color.set(css('--insert') || '#c9b458');
+  scene.background = new THREE.Color(css('--viewer') || '#e6ebe7');
+  containerMat.color.set(css('--container') || '#2f9a62');
+  lidMat.color.set(css('--lid') || '#3f7fd9');
+  resContainerMat.color.set(css('--container') || '#2f9a62');
+  resLidMat.color.set(css('--lid') || '#3f7fd9');
+  resInsertMat.color.set(css('--insert') || '#8a63d8');
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+// A host page can also switch the theme by setting data-theme on <html>.
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
 (function loop() {
   controls.update();
@@ -612,11 +615,16 @@ $('dlBoth').addEventListener('click', () => download('both'));
 $('dlLidTop').addEventListener('click', () => download('lidTop'));
 $('dlLidInsert').addEventListener('click', () => download('lidInsert'));
 
-// ---------- Dual-screen devices ----------
-// When a fold or hinge splits the screen into two (reported by the browser as viewport
-// segments), put the 3D view on one screen and the settings on the other. Add #duo to the
-// address to preview this layout on any screen.
+// ---------- Dual-screen and foldable devices ----------
+// The layout itself is responsive CSS (no device detection). On top of that, when the browser
+// reports that a fold or hinge splits the screen (viewport segments), or that a foldable is
+// half-open (device posture "folded"), put the 3D view on one side of the fold and the settings
+// on the other. Both APIs are optional; without them nothing changes. Add #duo to the address
+// to preview the split layout on any screen.
 const root = document.documentElement;
+const postureFolded = () =>
+  (navigator.devicePosture && navigator.devicePosture.type === 'folded') ||
+  matchMedia('(device-posture: folded)').matches;
 function detectDual() {
   let mode = null;
   const segs = window.viewport && window.viewport.segments;
@@ -626,6 +634,10 @@ function detectDual() {
     mode = 'h';
   } else if (matchMedia('(vertical-viewport-segments: 2)').matches) {
     mode = 'v';
+  } else if (postureFolded()) {
+    // Half-open but no segment info: a book-style fold runs down the middle in portrait
+    // and across the middle in landscape.
+    mode = window.innerWidth < window.innerHeight ? 'h' : 'v';
   }
   if (!mode && location.hash === '#duo') mode = window.innerWidth >= window.innerHeight ? 'h' : 'v';
   root.classList.toggle('dual', !!mode);
@@ -637,7 +649,15 @@ $('duoSwap').addEventListener('click', () => {
   const on = root.classList.toggle('swapped');
   try { localStorage.setItem('duoSwapped', on ? '1' : '0'); } catch (e) {}
 });
+// Folding or unfolding changes the viewport without a reload; re-check on every signal.
 window.addEventListener('resize', detectDual);
+window.addEventListener('orientationchange', detectDual);
 window.addEventListener('hashchange', detectDual);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', detectDual);
 if (window.viewport && 'onsegmentschange' in window.viewport) window.viewport.addEventListener('segmentschange', detectDual);
+if (navigator.devicePosture && navigator.devicePosture.addEventListener) navigator.devicePosture.addEventListener('change', detectDual);
+for (const q of ['(device-posture: folded)', '(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)']) {
+  const m = matchMedia(q);
+  if (m.addEventListener) m.addEventListener('change', detectDual);
+}
 detectDual();
